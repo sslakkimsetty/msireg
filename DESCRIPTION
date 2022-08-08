@@ -21,7 +21,4 @@ Imports:
     BiocParallel,
     Cardinal,
     EBImage,
-    magick,
-    methods,
-    Rtsne,
-    SimpleITK
+    Rtsne
