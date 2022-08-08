@@ -1,12 +1,27 @@
 Package: msireg
-Title: What the Package Does (One Line, Title Case)
+Title: Co-registration of Mass Spectrometry Images and Optical Images Using SimpleITK
 Version: 0.0.0.9000
 Authors@R: 
-    person("First", "Last", , "first.last@example.com", role = c("aut", "cre"),
-           comment = c(ORCID = "YOUR-ORCID-ID"))
-Description: What the package does (one paragraph).
-License: `use_mit_license()`, `use_gpl3_license()` or friends to pick a
-    license
+    person(
+        "Sai Srikanth", "Lakkimsetty", 
+        email = "saislakkimsetty@gmail.com", 
+        role = c("aut", "cre")
+    )
+Description: Co-registration of high dimensional mass spectrometry images with H&E stained 
+    microscopic (optical) images by applying dimensionality reduction and using registration 
+    methods from SimpleITK package. 
+License: MIT + file LICENSE
 Encoding: UTF-8
 Roxygen: list(markdown = TRUE)
 RoxygenNote: 7.2.1
+Suggests: 
+    testthat (>= 3.0.0)
+Config/testthat/edition: 3
+Imports: 
+    BiocParallel,
+    Cardinal,
+    EBImage,
+    magick,
+    methods,
+    Rtsne,
+    SimpleITK
