@@ -3,3 +3,7 @@
 import(Cardinal)
 import(EBImage)
 import(Rtsne)
+importFrom(graphics,locator)
+importFrom(graphics,points)
+importFrom(graphics,polygon)
+importFrom(sp,point.in.polygon)

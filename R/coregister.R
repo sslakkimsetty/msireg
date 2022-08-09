@@ -1,6 +1,6 @@
+#' @import EBImage
 #' @import Cardinal
 #' @import Rtsne
-#' @import EBImage
 
 
 coregister <- function(mse, opt, mse_tissue=NULL,
@@ -8,10 +8,9 @@ coregister <- function(mse, opt, mse_tissue=NULL,
                        verbose=FALSE) {
     mse <- Cardinal::process(mse) # <- process pending operations, if any
     mse_params <- list(
-        nX = dims(mse)[1],
-        nY = dims(mse)[2],
-        nF = dim(mse)[1],
-        nP = dim(mse)[2]
+        nX = dims(mse)[1], nY = dims(mse)[2],
+        nF = dim(mse)[1], nP = dim(mse)[2],
+        nXo = dim(opt)[1], nYo = dim(opt)[2]
     )
     isFull <- (mse_params$nX * mse_params$nY) == (mse_params$nP)
 
@@ -19,7 +18,7 @@ coregister <- function(mse, opt, mse_tissue=NULL,
     # 1. [Are all pixels present] AND [is mse_tissue NA]? <- yes = bad
     if (isFull & is.null(mse_tissue)) {
         message("Co-registration performs better on images with their backgrounds removed ...")
-        message("Select the tissue outline using Cardinal::SelectROI()")
+        message("Select the tissue outline using Cardinal::SelectROI() \n")
         # [!TODO] Need a better way to gather mse_tissue: what if mz()[1] is
         # a bad ion image? What if the code is not run from RStudio?
         mse_tissue <- Cardinal::selectROI(mse, mz=mz(mse)[1])
@@ -29,7 +28,7 @@ coregister <- function(mse, opt, mse_tissue=NULL,
     # 2. [Are some pixels missing] AND [is mse_tissue NA]?
     if (!isFull & is.null(mse_tissue)) {
         message("Co-registration performs better on images with their backgrounds removed ...")
-        message("Inferring tissue to be the pixels present ...")
+        message("Inferring tissue to be the pixels present ... \n")
         mse_tissue <- .constructMseTissue(mse, pars=mse_params)
     }
 
@@ -51,17 +50,18 @@ coregister <- function(mse, opt, mse_tissue=NULL,
     # Filter features
     if (!is.na(mz_list)) {
         if (length(mz_list) < 3) {
-            stop("length of mz_list has to be 3 at least")
+            stop("length of mz_list has to be 3 at least \n")
         } else {
             fid <- sort(features(mse, mz=mz_list))
         }
     } else {
         # Perform SSC
         message("filtering features ... ")
-        message("performing spatial shrunken centroids ... ")
+        message("performing spatial shrunken centroids ... \n")
         topf <- sort(.SSC(mse)$topf)
         fid <- features(mse, mz=topf)
     }
+
     mse_sub <- mse[fid, ]
     ints <- intensityMatrix2D(mse_sub) # nrows = nX * nY; byrow=TRUE
     ints <- standardScaler(ints)
@@ -72,7 +72,8 @@ coregister <- function(mse, opt, mse_tissue=NULL,
         msimg <- Image(aperm(msimg, perm=c(2,1,3)), colormode=Color)
     } else {
         # t-SNE representation
-        msimg <- .Rtsne(ints[mse_tissue, ], tissue=mse_tissue,
+        message("performing tsne ... \n")
+        msimg <- .Rtsne(ints[t(mse_tissue), ], tissue=mse_tissue,
                         params=mse_params)
     }
     msimg
@@ -115,7 +116,7 @@ intensityMatrix2D <- function(mse, byrow=TRUE) {
     if (byrow) out <- matrix(aperm(slice(mse), c(2,1,3)), ncol=nF)
     else out <- matrix(slice(mse), ncol=nF)
 
-    out[is.nan(out)] <- 0
+    out[is.na(out)] <- 0
     out
 }
 
@@ -126,18 +127,18 @@ intensityMatrix2D <- function(mse, byrow=TRUE) {
     initial_dims <- 30
     partial_pca <- FALSE
     pca <- FALSE
-    max_iter <- 250
+    max_iter <- 400
 
     if (ncol(ints) > 1000) {
         partial_pca <- TRUE
         max_iter <- 1000
     }
     else if (ncol(ints) > 500) pca <- TRUE
-    else if (ncol(ints) <= 30) theta <- 0.0
+    else if (ncol(ints) <= 30) theta <- 0.1 # TEMP change theta=0.05
 
     out <- Rtsne(ints, dims=3, theta=theta, pca=pca, initial_dims=initial_dims,
-                 partial_pca=partial_pca, verbose=verbose,
-                 max_iter=max_iter, num_threads=0)
+                 partial_pca=partial_pca, verbose=verbose, max_iter=500, # TEMP change max_iter=max_iter
+                 check_duplicates=FALSE, num_threads=0)
     tsneToImage(out, tissue=tissue, params=params)
 }
 
@@ -146,26 +147,15 @@ tsneToImage <- function(img, tissue=NA, params=NA) {
     if ("Rtsne" %in% class(img)) img <- img$Y
 
     proto <- as.vector(NA, mode=typeof(img))
-    out <- array(proto, dim=c(params$nY*params$nX, ncol(img)))
-    out[tissue, ] <- img
+    out <- matrix(rep(proto, params$nX*params$nY*ncol(img)), ncol=ncol(img))
+    out[t(tissue), ] <- img
 
-    out <- array(out, dim=c(params$nX, params$nY, 3))
+    out <- array(out, dim=c(params$nY, params$nX, 3))
     out[is.na(out)] <- 0
     out <- aperm(out, perm=c(2,1,3))
     out <- standardScaler(out)
-    Image(out, colormode=Color)
+    EBImage::Image(out, colormode=Color)
 }
-
-
-standardScaler <- function(img) {
-    img <- (img - min(img)) / (max(img) - min(img))
-    img
-}
-
-
-
-
-
 
 
 
