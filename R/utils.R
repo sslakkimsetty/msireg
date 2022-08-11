@@ -1,38 +1,50 @@
-#' @importFrom graphics locator points polygon
-#' @importFrom sp point.in.polygon
 
 
-.selectROI <- function(img) {
-    nX <- dim(img)[1]
-    nY <- dim(img)[2]
+normalizeImage <- function(img, separate=TRUE, ft=c(0,1),
+                           contrast.enhance=c("none", "suppression", "histogram"),
+                           smooth.image=c("none", "gaussian", "adaptive"),
+                           suppression=c(0.01, 0.99)) {
 
-    display(img, "raster")
-    loc <- .locator()
-    coord <- as.matrix(expand.grid(x=c(1:nX), y=c(1:nY)))
-    out <- point.in.polygon(coord[, 1], coord[, 2], loc$x, loc$y)
-    out <- matrix(out, nrow=nX)
-}
+    contrast.enhance <- match.arg(contrast.enhance, c("none", "suppression", "histogram"))
+    if (contrast.enhance == "suppression") contrast.enhance <- contrast.enhance.suppression
+    contrast.enhance <- Cardinal:::contrast.enhance.method(contrast.enhance)
 
+    smooth.image <- match.arg(smooth.image, c("none", "gaussian", "adaptive"))
+    smooth.image <- Cardinal:::smooth.image.method(smooth.image)
 
-.locator <- function() {
-    xs <- numeric()
-    ys <- numeric()
-    while (TRUE) {
-        loc <- locator(1)
-        if (!is.null(loc)) {
-            points(loc$x, loc$y, pch=4, col="white")
-            xs <- c(xs, loc$x)
-            ys <- c(ys, loc$y)
-        } else {
-            break
-        }
+    normalize.image <- Cardinal:::normalize.image.linear
+
+    ints <- imageData(img)
+
+        if (length(dim(img)) == 2) {
+        ints <- normalize.image(smooth.image(contrast.enhance(ints)))
+        return(Image(ints, colormode=Grayscale))
     }
-    polygon(xs, ys, col=rgb(1,1,1,0.5))
-    list(x=xs, y=ys)
+
+    if (isTRUE(separate)) {
+        . <- sapply(c(1:dim(img)[3]), function(i) {
+            ints[, , i] <<- normalize.image(smooth.image(contrast.enhance(ints[, , i])))
+        })
+    } else {
+        . <- sapply(c(1:dim(img)[3]), function(i) {
+            ints[, , i] <<- smooth.image(contrast.enhance(ints[, , i]))
+        })
+    }
+    Image(ints, colormode=Color)
 }
 
 
-standardScaler <- function(img) {
-    img <- (img - min(img)) / (max(img) - min(img))
-    img
+contrast.enhance.suppression <- function(x, suppression=c(0, 1)) {
+    if (all(is.na(x))) return(x)
+
+    cutoff_min <- quantile(x, suppression[0], na.rm=TRUE)
+    cutoff_max <- quantile(x, suppression[1], na.rm=TRUE)
+    message(paste0(c("cutoff_min is ", cutoff_min)))
+    message(paste0(c("cutoff_max is ", cutoff_max)))
+
+    if (isTRUE(cutoff_min > min(x, na.rm=TRUE))) x[x < cutoff_min] <- cutoff_min
+    if (cutoff_max > min(x, na.rm=TRUE)) x[x > cutoff_max] <- cutoff_max
+    x
 }
+
+

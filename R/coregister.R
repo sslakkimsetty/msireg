@@ -80,22 +80,6 @@ coregister <- function(mse, opt, mse_tissue=NULL,
 }
 
 
-.constructMseTissue <- function(mse, pars) {
-    tissue <- matrix(rep(FALSE, pars$nX*pars$nY), ncol=pars$nY)
-    tissue[as.matrix(coord(mse))] <- TRUE
-    tissue
-}
-
-
-.rasterizeROIFromCardinal <- function(mse, tissue, byrow=TRUE) {
-    out <- matrix(rep(FALSE, prod(dims(mse))), nrow=dims(mse)[1])
-    out[as.matrix(coord(mse))] <- tissue
-
-    if (byrow) out
-    else t(out)
-}
-
-
 .SSC <- function(mse) {
     ssc <- spatialShrunkenCentroids(mse, r=c(0,1,2), s=c(3), k=c(15,20),
                                     method="gaussian",
