@@ -18,7 +18,7 @@ constructROIFromMSIImage <- function(mse, attrs) {
 }
 
 
-drawROIonImage <- function(img) {
+drawROIOnImage <- function(img) {
     nX <- dim(img)[1]
     nY <- dim(img)[2]
 

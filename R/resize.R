@@ -37,7 +37,7 @@ PadImageToMatchAspectRatio <- function(img, target_dim=NULL) {
 PadImageToMatchDims <- function(img, target_dim=c(200,200)) {
     if ( any(dim(img)[1:2] > target_dim) ) stop("Dimensions of img are
                                                  larger than target_dim")
-    dim_diff <- target_dim - dim(img)[1:2]
+    dim_diff <- target_dim - dim(img)[1:2] 
 
     padding <- c(0, 0, 0, 0) # padding c(bottom, left, top, right)
     padding <- rep(c(dim_diff[2]/2, dim_diff[1]/2), 2)
@@ -60,14 +60,16 @@ PadImageToMatchDims <- function(img, target_dim=c(200,200)) {
 
     # New dimensions
     w1 <- w0 + padding[2] + padding[4]
-    h1 <- h0 + padding[1] + padding[3]
+    h1 <- h0 + padding[1] + padding[3] 
 
     if (isTRUE(multiframe)) {
         out <- array(0, dim=c(w1, h1, c))
-        out[(padding[2]+1):(padding[2]+w0), (padding[3]+1):(padding[3]+h0), ] <- imageData(img)
+        out[c((padding[2]+1):(padding[2]+w0)), 
+        	c((padding[3]+1):(padding[3]+h0)), ] <- imageData(img)
     } else {
-        out <- matrix(0, nrow=w1, ncol=h1)
-        out[padding[2]+1:padding[2]+w0, padding[3]+1:padding[3]+h0] <- imageData(img)
+        out <- matrix(0, nrow=w1, ncol=h1) 
+        out[c((padding[2]+1):(padding[2]+w0)), 
+        	c((padding[3]+1):(padding[3]+h0))] <- imageData(img)
     }
 
     Image(out, colormode=Color)
