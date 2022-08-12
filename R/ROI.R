@@ -50,8 +50,8 @@ drawROIonImage <- function(img) {
 
 applyROIonImage <- function(img, roi) {
     if (length(dim(img)) > 2) roi <- rep(roi, dim(img)[3])
-    Reduce("*", list(imageData(img), roi)) |>
-        Image(colormode=Color)
+    out <- Reduce("*", list(imageData(img), roi))
+    Image(out, colormode=Color)
 }
 
 

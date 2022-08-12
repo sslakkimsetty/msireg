@@ -127,19 +127,6 @@ intensityMatrix2D <- function(mse, byrow=TRUE) {
 }
 
 
-tsneToImage <- function(img, tissue=NA, params=NA) {
-    if ("Rtsne" %in% class(img)) img <- img$Y
-
-    proto <- as.vector(NA, mode=typeof(img))
-    out <- matrix(rep(proto, params$nX*params$nY*ncol(img)), ncol=ncol(img))
-    out[t(tissue), ] <- img
-
-    out <- array(out, dim=c(params$nY, params$nX, 3))
-    out[is.na(out)] <- 0
-    out <- aperm(out, perm=c(2,1,3))
-    out <- standardScaler(out)
-    EBImage::Image(out, colormode=Color)
-}
 
 
 
