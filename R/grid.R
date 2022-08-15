@@ -42,6 +42,7 @@ constructNDGrid <- function(img, scale_factor=4) {
     img
 } 
 
+
 .modifyGridMatrix <- function(img, x, y, c) {
     coords <- as.matrix(expand.grid(x, y, KEEP.OUT.ATTRS=TRUE))
     img[coords] <- 1 

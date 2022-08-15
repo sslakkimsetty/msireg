@@ -1,11 +1,11 @@
-#' @import EBImage
+#' @import SimpleITK
 #' @import Cardinal
+#' @import EBImage
 #' @import Rtsne
 
 
-coregister <- function(mse, opt, mse_tissue=NULL,
-                       opt_tissue=NA, SSC=TRUE, mz_list=NA,
-                       verbose=FALSE) {
+coregister <- function(mse, opt, mse_roi=NULL, opt_roi=NULL,
+                       SSC=TRUE, mz_list=NULL, verbose=FALSE) {
     mse <- Cardinal::process(mse) # <- process pending operations, if any
     mse_params <- list(
         nX = dims(mse)[1], nY = dims(mse)[2],
@@ -15,40 +15,40 @@ coregister <- function(mse, opt, mse_tissue=NULL,
     isFull <- (mse_params$nX * mse_params$nY) == (mse_params$nP)
 
     ##### Sanity checks #####
-    # 1. [Are all pixels present] AND [is mse_tissue NA]? <- yes = bad
-    if (isFull & is.null(mse_tissue)) {
+    # 1. [Are all pixels present] AND [is mse_roi NA]? <- yes = bad
+    if (isFull & is.null(mse_roi)) {
         message("Co-registration performs better on images with their backgrounds removed ...")
         message("Select the tissue outline using Cardinal::SelectROI() \n")
-        # [!TODO] Need a better way to gather mse_tissue: what if mz()[1] is
+        # [!TODO] Need a better way to gather mse_roi: what if mz()[1] is
         # a bad ion image? What if the code is not run from RStudio?
-        mse_tissue <- Cardinal::selectROI(mse, mz=mz(mse)[1])
-        mse_tissue <- .rasterizeROIFromCardinal(mse, mse_tissue)
+        mse_roi <- selectROI(mse, mz=mz(mse)[1])
+        mse_roi <- rasterizeROIFromCardinal(mse, mse_roi)
     }
 
-    # 2. [Are some pixels missing] AND [is mse_tissue NA]?
-    if (!isFull & is.null(mse_tissue)) {
+    # 2. [Are some pixels missing] AND [is mse_roi NA]?
+    if (!isFull & is.null(mse_roi)) {
         message("Co-registration performs better on images with their backgrounds removed ...")
         message("Inferring tissue to be the pixels present ... \n")
-        mse_tissue <- .constructMseTissue(mse, pars=mse_params)
+        mse_roi <- constructROIFromMSIImage(mse, pars=mse_params)
     }
 
-    # 3. [Are some pixels missing] AND [is mse_tissue not NA]?
-    if (!isFull & !is.null(mse_tissue)) {
-        if (length(mse_tissue) == mse_params$nP) { # need to rasterize
-            mse_tissue <- .rasterizeROIFromCardinal(mse, mse_tissue)
-        } else if (length(mse_tissue) != mse_params$nX * mse_params$nY) {
-            message("mse_tissue parameter is not passed properly (incorrect size)")
+    # 3. [Are some pixels missing] AND [is mse_roi not NA]?
+    if (!isFull & !is.null(mse_roi)) {
+        if (length(mse_roi) == mse_params$nP) { # need to rasterize
+            mse_roi <- rasterizeROIFromCardinal(mse, mse_roi)
+        } else if (length(mse_roi) != mse_params$nX * mse_params$nY) {
+            message("mse_roi parameter is not passed properly (incorrect size)")
             message("Select the tissue outline using Cardinal::SelectROI()")
-            mse_tissue <- Cardinal::selectROI(mse, mz=mz(mse)[1])
-            mse_tissue <- .rasterizeROIFromCardinal(mse, mse_tissue)
-            # [!TODO] Need a better way to gather mse_tissue: what if mz()[1] is
+            mse_roi <- Cardinal::selectROI(mse, mz=mz(mse)[1])
+            mse_roi <- rasterizeROIFromCardinal(mse, mse_roi)
+            # [!TODO] Need a better way to gather mse_roi: what if mz()[1] is
             # a bad ion image? What if the code is not run from RStudio?
         }
     }
     ##### Sanity checks complete #####
 
     # Filter features
-    if (!is.na(mz_list)) {
+    if (!is.null(mz_list)) {
         if (length(mz_list) < 3) {
             stop("length of mz_list has to be 3 at least \n")
         } else {
@@ -64,7 +64,7 @@ coregister <- function(mse, opt, mse_tissue=NULL,
 
     mse_sub <- mse[fid, ]
     ints <- intensityMatrix2D(mse_sub) # nrows = nX * nY; byrow=TRUE
-    ints <- standardScaler(ints)
+    ints <- normalizeImage(ints)
 
     # Construct 3-channeled MSI image
     if (length(mz(mse_sub)) == 3) {
@@ -73,10 +73,56 @@ coregister <- function(mse, opt, mse_tissue=NULL,
     } else {
         # t-SNE representation
         message("performing tsne ... \n")
-        msimg <- .Rtsne(ints[t(mse_tissue), ], tissue=mse_tissue,
-                        params=mse_params)
+        msimg <- .Rtsne(ints[t(mse_roi), ], tissue=mse_roi,
+                        attrs=mse_params)
     }
-    msimg
+    print(dim(msimg))
+    msimg <- normalizeImage(msimg, contrast.enhance="histogram")
+
+    # Optical image stuff
+    if (is.null(opt_roi)) {
+        opt_roi <- drawROIOnImage(opt)
+    }
+    opt <- applyROIonImage(opt, opt_roi)
+    opt <- resizeAndPadImageToMatchDims(opt, dim(msimg)[1:2])
+    opt <- normalizeImage(opt, contrast.enhance="histogram")
+
+    # Convert to grayscale images
+    # opt <- channel(opt, "luminance")
+    # msimg <- channel(msimg, "luminance")
+
+    # SimpleITK init
+    fixed <- SimpleITK::as.image(imageData(opt), isVector=FALSE)
+    moving <- SimpleITK::as.image(imageData(msimg), isVector=FALSE)
+
+    list(opt=opt, msimg=msimg, fixed=fixed, moving=moving)
+    # Registration
+    # coregisterWithSimpleITK(fixed, moving)
+}
+
+
+..coregister <- function(mse, opt, mse_roi=NULL, opt_roi=NA,
+                         SSC=TRUE, mz_list=NULL, verbose=FALSE, .data=NULL) {
+    opt <- .data$opt
+    msimg <- .data$msimg
+    fixed <- .data$fixed
+    moving <- .data$moving
+
+    # # Convert to grayscale images
+    # opt <- channel(opt, "luminance")
+    # msimg <- channel(msimg, "luminance")
+
+    # SimpleITK init
+    # fixed <- SimpleITK::as.image(imageData(opt), isVector=FALSE)
+    # moving <- SimpleITK::as.image(imageData(msimg), isVector=FALSE)
+
+    # Registration
+    outTx <- coregisterWithSimpleITK(fixed, moving)
+    list(
+        opt=opt, msimg=msimg,
+        fixed=fixed, moving=moving,
+        outTx=outTx
+    )
 }
 
 
@@ -105,7 +151,7 @@ intensityMatrix2D <- function(mse, byrow=TRUE) {
 }
 
 
-.Rtsne <- function(ints, tissue=NA, params=NA, verbose=TRUE) {
+.Rtsne <- function(ints, tissue=NA, attrs=NA, verbose=TRUE) {
     # Set params for t-SNE method
     theta <- 0.1
     initial_dims <- 30
@@ -123,7 +169,7 @@ intensityMatrix2D <- function(mse, byrow=TRUE) {
     out <- Rtsne(ints, dims=3, theta=theta, pca=pca, initial_dims=initial_dims,
                  partial_pca=partial_pca, verbose=verbose, max_iter=500, # TEMP change max_iter=max_iter
                  check_duplicates=FALSE, num_threads=0)
-    tsneToImage(out, tissue=tissue, params=params)
+    tsneToImage(out, tissue=tissue, attrs=attrs)
 }
 
 

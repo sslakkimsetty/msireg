@@ -13,3 +13,4 @@ tsneToImage <- function(img, tissue=NA, attrs=NA) {
     out <- normalizeImage(out, separate=TRUE)
     EBImage::Image(out, colormode=Color)
 }
+
