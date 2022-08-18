@@ -51,7 +51,7 @@ drawROIOnImage <- function(img) {
 }
 
 
-applyROIonImage <- function(img, roi) {
+applyROIOnImage <- function(img, roi) {
     colormode <- Grayscale
     if (length(dim(img)) > 2) {
         roi <- rep(roi, dim(img)[3])
