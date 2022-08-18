@@ -2,12 +2,12 @@
 #' @importFrom sp point.in.polygon
 
 
-rasterizeROIFromCardinal <- function(mse, roi, byrow=TRUE) {
+rasterizeROIFromCardinal <- function(mse, roi, byrow=FALSE) {
     out <- matrix(rep(FALSE, prod(dims(mse))), nrow=dims(mse)[1])
     out[as.matrix(coord(mse))] <- roi
 
-    if (byrow) out
-    else t(out)
+    if (byrow) t(out)
+    else out
 }
 
 
@@ -21,12 +21,15 @@ constructROIFromMSIImage <- function(mse, attrs) {
 drawROIOnImage <- function(img) {
     nX <- dim(img)[1]
     nY <- dim(img)[2]
+    coord <- as.matrix(expand.grid(x=c(1:nX), y=c(1:nY)))
 
     display(img, "raster")
     loc <- .locator()
-    coord <- as.matrix(expand.grid(x=c(1:nX), y=c(1:nY)))
+    if ( identical(unlist(loc), numeric(0)) ) {
+        return( matrix(FALSE, nrow=nX, ncol=nY) )
+    }
     out <- point.in.polygon(coord[, 1], coord[, 2], loc$x, loc$y)
-    out <- matrix(out, nrow=nX) # byrow=FALSE because point.in.polygon is column major
+    out <- matrix(out, nrow=nX)
 }
 
 
@@ -59,14 +62,37 @@ applyROIonImage <- function(img, roi) {
 }
 
 
+multiSelectROI <- function(mse, mz, rasterize=TRUE, ...) {
+    sel <- TRUE
+    roi <- rep(FALSE, dim(mse)[2])
+
+    while (sel) {
+        .roi <- selectROI(mse, mz=mz, ...)
+        roi <- (roi | .roi)
+        sel <- askYesNo("Do you want to select another
+            ROI on the same tissue?")
+    }
+
+    if (rasterize) rasterizeROIFromCardinal(mse, roi)
+    else roi
+}
 
 
+multiDrawROI <- function(img) {
+    nX <- dim(img)[1]
+    nY <- dim(img)[2]
 
+    sel <- TRUE
+    roi <- matrix(FALSE, nrow=nX, ncol=nY)
 
-
-
-
-
+    while (sel) {
+        .roi <- drawROIOnImage(img)
+        roi <- (roi | .roi)
+        sel <- askYesNo("Do you want to select another
+            ROI on the same tissue?")
+    }
+    roi
+}
 
 
 
