@@ -63,3 +63,82 @@ coregisterWithSimpleITK <- function(fixed, moving) {
 }
 
 
+initTransform <- function(fixed, moving) {
+    CenteredTransformInitializer(fixed, moving,
+                                 Euler2DTransform(), "GEOMETRY")
+}
+
+
+euler2DRegWithSimpleITK <- function(fixed, moving, init_tf=NULL) {
+    reg <- ImageRegistrationMethod()
+
+    # Similarity metric settings
+    reg$SetMetricAsMattesMutualInformation(
+        numberOfHistogramBins=50)
+    reg$SetMetricSamplingStrategy("RANDOM")
+    reg$SetMetricSamplingPercentage(0.01)
+
+    reg$SetInterpolator("sitkLinear")
+
+    # Optimizer settings
+    reg$SetOptimizerAsGradientDescent(
+        learningRate=1.0,
+        numberOfIterations=100,
+        convergenceMinimumValue=1e-6,
+        convergenceWindowSize=10
+    )
+    reg$SetOptimizerScalesFromPhysicalShift()
+
+    if (is.null(init_tf)) init_tf <- initTransform(fixed, moving)
+
+    reg$SetMovingInitialTransform(init_tf)
+    opt_tf <- Euler2DTransform()
+    reg$SetInitialTransform(opt_tf)
+
+    # Setup for the multi-resolution framework
+    reg$SetShrinkFactorsPerLevel(shrinkFactors = c(4,2,1))
+    reg$SetSmoothingSigmasPerLevel(smoothingSigmas=c(2,1,0))
+    reg$SmoothingSigmasAreSpecifiedInPhysicalUnitsOn()
+
+    dev_null <- reg$Execute(fixed, moving)
+    # CompositeTransform(opt_tf)$AddTransform(init_tf)
+    opt_tf
+}
+
+
+affineRegWithSimpleITK <- function(fixed, moving, init_tf=NULL) {
+    reg <- ImageRegistrationMethod()
+
+    # Similarity metric settings
+    reg$SetMetricAsMattesMutualInformation(
+        numberOfHistogramBins=50)
+    reg$SetMetricSamplingStrategy("RANDOM")
+    reg$SetMetricSamplingPercentage(0.01)
+
+    reg$SetInterpolator("sitkLinear")
+
+    # Optimizer settings
+    reg$SetOptimizerAsGradientDescent(
+        learningRate=1.0,
+        numberOfIterations=100,
+        convergenceMinimumValue=1e-6,
+        convergenceWindowSize=10
+    )
+    reg$SetOptimizerScalesFromPhysicalShift()
+
+    if (is.null(init_tf)) init_tf <- euler2DRegWithSimpleITK(fixed, moving)
+
+    reg$SetMovingInitialTransform(init_tf)
+    opt_tf <- AffineTransform(2)
+    reg$SetInitialTransform(opt_tf)
+
+    # Setup for the multi-resolution framework
+    reg$SetShrinkFactorsPerLevel(shrinkFactors = c(4,2,1))
+    reg$SetSmoothingSigmasPerLevel(smoothingSigmas=c(2,1,0))
+    reg$SmoothingSigmasAreSpecifiedInPhysicalUnitsOn()
+
+    dev_null <- reg$Execute(fixed, moving)
+    # CompositeTransform(opt_tf)$AddTransform(init_tf)
+    opt_tf
+}
+
