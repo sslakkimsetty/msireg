@@ -36,7 +36,115 @@ commandMultiIteration <- function(method) {
     cat(msg)
 }
 
-coregisterWithSimpleITK <- function(fixed, moving) {
+
+register <- function(fixed, moving, 
+                     type=c("center", "rigid", "affine", "ffd"),
+                     optim=c("gradientDescent", "gradientDescentLineSearch",
+                                 "lbfgsb", "lbfgs2", "amoeba", "powell"),
+                     metric=c("correlation", "demons", "jointHistogramMI",
+                              "meanSquares", "mattesMI"),
+                     interpolator=c("linear", "bspline", "nearest"), 
+                     samplingStrategy=c("RANDOM", "REGULAR", "NONE"), 
+                     samplingPercentage=0.01, init_tf=NULL
+                     ) { 
+    reg <- list() 
+    reg$fixed <- fixed 
+    reg$moving <- moving 
+    reg$reg <- ImageRegistrationMethod() 
+
+    type <- match.arg(type)
+    reg <- switch(type, 
+                  center = register.type.center(reg), 
+                  rigid = register.type.rigid(reg, init_tf),
+                  affine = register.type.affine(reg, init_tf),
+                  ffd = register.type.ffd(reg)) 
+
+    if (type == "center") return(reg$reg) 
+
+    optim <- match.arg(optim) 
+    reg <- switch(optim, 
+        gradientDescent = register.optim.gd(reg), 
+        gradientDescentLineSearch = register.optim.gdls(reg), 
+        lbfgsb = register.optim.lbfgsb(reg), 
+        lbfgs2 = register.optim.lbfgs2(reg), 
+        amoeba = register.optim.amoeba(reg), 
+        powell = register.optim.powell(reg)) 
+
+    metric <- match.arg(metric) 
+    reg <- switch(metric, 
+        correlation = register.metric.correlation(reg), 
+        demons = register.metric.demons(reg), 
+        jointHistogramMI = register.metric.jointHistogramMI(reg), 
+        meanSquares = register.metric.meanSquares(reg), 
+        mattesMI = register.metric.mattesMI(reg)) 
+
+    interpolator = match.arg(interpolator) 
+    reg <- switch(interpolator, 
+        linear = register.interpolator.linear(reg), 
+        bspline = register.interpolator.bspline(reg), 
+        nearest = register.interpolator.nearest(reg)) 
+
+    samplingStrategy <- match.arg(samplingStrategy)
+    reg$reg$SetMetricSamplingStrategy(samplingStrategy) 
+    reg$reg$SetMetricSamplingPercentage(samplingPercentage) 
+    reg$reg$SetOptimizerScalesFromPhysicalShift() 
+
+    reg$reg$SetShrinkFactorsPerLevel(shrinkFactors = c(4,2,1))
+    reg$reg$SetSmoothingSigmasPerLevel(smoothingSigmas=c(2,1,0))
+    reg$reg$SmoothingSigmasAreSpecifiedInPhysicalUnitsOn()
+
+    reg$outTx <- reg$reg$Execute(fixed, moving) 
+    reg
+} 
+
+
+register.type.center <- function(reg) {
+    reg$reg <- CenteredTransformInitializer(reg$fixed, reg$moving, 
+        Euler2DTransform(), "GEOMETRY") 
+    reg 
+} 
+
+
+register.type.rigid <- function(reg, init_tf) { 
+    if (is.null(init_tf)) init_tf <- register()
+    opt_tf <- Euler2DTransform(init_tf)
+    reg$reg$SetInitialTransform(opt_tf) 
+    reg 
+} 
+
+
+register.type.affine <- function(reg, init_tf) {
+    reg$reg$SetMovingInitialTransform(init_tf)
+    opt_tf <- AffineTransform(2) 
+    reg$reg$SetInitialTransform(opt_tf) 
+    reg 
+} 
+
+
+register.metric.mattesMI <- function(reg) {
+    reg$reg$SetMetricAsMattesMutualInformation(
+        numberOfHistogramBins=50) 
+    reg 
+}
+
+
+register.optim.lbfgsb <- function(reg) {
+    reg$reg$SetOptimizerAsLBFGSB(gradientConvergenceTolerance=1e-7, 
+        numberOfIterations=100) 
+    reg 
+} 
+
+
+register.interpolator.linear <- function(reg) {
+    reg$reg$SetInterpolator("sitkLinear") 
+    reg 
+}
+
+
+
+
+
+bsplineRegWithSimpleITK <- function(fixed, moving) {
     meshSize <- rep(1, moving$GetDimension())
     init <- BSplineTransformInitializer(fixed, meshSize)
     init$GetParameters()
@@ -55,6 +163,7 @@ coregisterWithSimpleITK <- function(fixed, moving) {
     reg$AddCommand("sitkIterationEvent", function() commandIteration(reg))
     reg$AddCommand( "sitkMultiResolutionIterationEvent", function() commandMultiIteration(reg) )
 
+    reg$SetOptimizerScalesFromPhysicalShift()
     reg$SetShrinkFactorsPerLevel(c(4,2,1))
     reg$SetSmoothingSigmasPerLevel(c(4,2,1))
 
@@ -91,8 +200,11 @@ euler2DRegWithSimpleITK <- function(fixed, moving, init_tf=NULL) {
 
     if (is.null(init_tf)) init_tf <- initTransform(fixed, moving)
 
-    reg$SetMovingInitialTransform(init_tf)
-    opt_tf <- Euler2DTransform()
+    # reg$SetMovingInitialTransform(init_tf)
+    # opt_tf <- Euler2DTransform()
+    # reg$SetInitialTransform(opt_tf)
+
+    opt_tf <- Euler2DTransform(init_tf)
     reg$SetInitialTransform(opt_tf)
 
     # Setup for the multi-resolution framework
@@ -101,7 +213,7 @@ euler2DRegWithSimpleITK <- function(fixed, moving, init_tf=NULL) {
     reg$SmoothingSigmasAreSpecifiedInPhysicalUnitsOn()
 
     dev_null <- reg$Execute(fixed, moving)
-    # CompositeTransform(opt_tf)$AddTransform(init_tf)
+    # CompositeTransform(Transform(opt_tf))$AddTransform(init_tf)
     opt_tf
 }
 
@@ -139,6 +251,7 @@ affineRegWithSimpleITK <- function(fixed, moving, init_tf=NULL) {
 
     dev_null <- reg$Execute(fixed, moving)
     # CompositeTransform(opt_tf)$AddTransform(init_tf)
-    opt_tf
+    # opt_tf
+    list(init_tf=init_tf, opt_tf=opt_tf)
 }
 
