@@ -37,107 +37,142 @@ commandMultiIteration <- function(method) {
 }
 
 
-register <- function(fixed, moving, 
+register <- function(fixed, moving,
                      type=c("center", "rigid", "affine", "ffd"),
                      optim=c("gradientDescent", "gradientDescentLineSearch",
                                  "lbfgsb", "lbfgs2", "amoeba", "powell"),
                      metric=c("correlation", "demons", "jointHistogramMI",
                               "meanSquares", "mattesMI"),
-                     interpolator=c("linear", "bspline", "nearest"), 
-                     samplingStrategy=c("RANDOM", "REGULAR", "NONE"), 
-                     samplingPercentage=0.01, init_tf=NULL
-                     ) { 
-    reg <- list() 
-    reg$fixed <- fixed 
-    reg$moving <- moving 
-    reg$reg <- ImageRegistrationMethod() 
+                     interpolator=c("linear", "bspline", "nearest"),
+                     sampling_strategy=c("RANDOM", "REGULAR", "NONE"),
+                     sampling_percentage=0.01, initial_transform=NULL,
+                     out_transform=CompositeTransform()
+                     ) {
+    out <- list()
+    out$fixed <- fixed
+    out$moving <- moving
+    out$init_tf <- initial_transform
+    out$out_tf <- out_transform
+    out$reg <- ImageRegistrationMethod()
 
     type <- match.arg(type)
-    reg <- switch(type, 
-                  center = register.type.center(reg), 
-                  rigid = register.type.rigid(reg, init_tf),
-                  affine = register.type.affine(reg, init_tf),
-                  ffd = register.type.ffd(reg)) 
+    out <- switch(type,
+                  center = register.type.center(out),
+                  rigid = register.type.rigid(out),
+                  affine = register.type.affine(out),
+                  ffd = register.type.ffd(out))
+    if (type == "center") return(out)
 
-    if (type == "center") return(reg$reg) 
+    optim <- match.arg(optim)
+    out <- switch(optim,
+                  gradientDescent = register.optim.gd(out),
+                  gradientDescentLineSearch = register.optim.gdls(out),
+                  lbfgsb = register.optim.lbfgsb(out),
+                  lbfgs2 = register.optim.lbfgs2(out),
+                  amoeba = register.optim.amoeba(out),
+                  powell = register.optim.powell(out))
 
-    optim <- match.arg(optim) 
-    reg <- switch(optim, 
-        gradientDescent = register.optim.gd(reg), 
-        gradientDescentLineSearch = register.optim.gdls(reg), 
-        lbfgsb = register.optim.lbfgsb(reg), 
-        lbfgs2 = register.optim.lbfgs2(reg), 
-        amoeba = register.optim.amoeba(reg), 
-        powell = register.optim.powell(reg)) 
+    metric <- match.arg(metric)
+    out <- switch(metric,
+                  correlation = register.metric.correlation(out),
+                  demons = register.metric.demons(out),
+                  jointHistogramMI = register.metric.jointHistogramMI(out),
+                  meanSquares = register.metric.meanSquares(out),
+                  mattesMI = register.metric.mattesMI(out))
 
-    metric <- match.arg(metric) 
-    reg <- switch(metric, 
-        correlation = register.metric.correlation(reg), 
-        demons = register.metric.demons(reg), 
-        jointHistogramMI = register.metric.jointHistogramMI(reg), 
-        meanSquares = register.metric.meanSquares(reg), 
-        mattesMI = register.metric.mattesMI(reg)) 
-
-    interpolator = match.arg(interpolator) 
-    reg <- switch(interpolator, 
-        linear = register.interpolator.linear(reg), 
-        bspline = register.interpolator.bspline(reg), 
-        nearest = register.interpolator.nearest(reg)) 
+    interpolator = match.arg(interpolator)
+    out <- switch(interpolator,
+                  linear = register.interpolator.linear(out),
+                  bspline = register.interpolator.bspline(out),
+                  nearest = register.interpolator.nearest(out))
 
     samplingStrategy <- match.arg(samplingStrategy)
-    reg$reg$SetMetricSamplingStrategy(samplingStrategy) 
-    reg$reg$SetMetricSamplingPercentage(samplingPercentage) 
-    reg$reg$SetOptimizerScalesFromPhysicalShift() 
+    out$reg$SetMetricSamplingStrategy(samplingStrategy)
+    out$reg$SetMetricSamplingPercentage(samplingPercentage)
+    out$reg$SetOptimizerScalesFromPhysicalShift()
 
-    reg$reg$SetShrinkFactorsPerLevel(shrinkFactors = c(4,2,1))
-    reg$reg$SetSmoothingSigmasPerLevel(smoothingSigmas=c(2,1,0))
-    reg$reg$SmoothingSigmasAreSpecifiedInPhysicalUnitsOn()
+    out$reg$SetShrinkFactorsPerLevel(shrinkFactors = c(4,2,1))
+    out$reg$SetSmoothingSigmasPerLevel(smoothingSigmas=c(4,2,1))
+    out$reg$SmoothingSigmasAreSpecifiedInPhysicalUnitsOn()
 
-    reg$outTx <- reg$reg$Execute(fixed, moving) 
-    reg
-} 
-
-
-register.type.center <- function(reg) {
-    reg$reg <- CenteredTransformInitializer(reg$fixed, reg$moving, 
-        Euler2DTransform(), "GEOMETRY") 
-    reg 
-} 
-
-
-register.type.rigid <- function(reg, init_tf) { 
-    if (is.null(init_tf)) init_tf <- register()
-    opt_tf <- Euler2DTransform(init_tf)
-    reg$reg$SetInitialTransform(opt_tf) 
-    reg 
-} 
-
-
-register.type.affine <- function(reg, init_tf) {
-    reg$reg$SetMovingInitialTransform(init_tf)
-    opt_tf <- AffineTransform(2) 
-    reg$reg$SetInitialTransform(opt_tf) 
-    reg 
-} 
-
-
-register.metric.mattesMI <- function(reg) {
-    reg$reg$SetMetricAsMattesMutualInformation(
-        numberOfHistogramBins=50) 
-    reg 
+    out$outTx <- out$reg$Execute(fixed, moving)
+    out
 }
 
 
-register.optim.lbfgsb <- function(reg) {
-    reg$reg$SetOptimizerAsLBFGSB(gradientConvergenceTolerance=1e-7, 
-        numberOfIterations=100) 
-    reg 
-} 
+register.type.center <- function(x) {
+    x$init_tf <- CenteredTransformInitializer(x$fixed, x$moving,
+                                              Euler2DTransform(), "GEOMETRY")
+    x
+}
 
 
-register.interpolator.linear <- function(reg) {
-    reg$reg$SetInterpolator("sitkLinear") 
-    reg 
+register.type.rigid <- function(x) {
+    if (is.null(x$init_tf)) {
+        x <- register.type.center(x)
+    }
+    opt_tf <- Euler2DTransform(x$init_tf)
+    x$reg$SetInitialTransform(opt_tf)
+    x
+}
+
+
+register.type.affine <- function(x) {
+    if (is.null(x$init_tf)) {
+        x$init_tf <- register(x$fixed, x$moving,
+                              type="rigid",
+                              optim="gradientDescent",
+                              metric="mattesMI")$outTx
+    }
+    x$reg$SetMovingInitialTransform(x$init_tf)
+    opt_tf <- AffineTransform(2)
+    x$reg$SetInitialTransform(opt_tf)
+    x
+}
+
+
+register.type.ffd <- function(x) {
+    if (is.null(x$init_tf)) {
+        x$init_tf <- register(x$fixed, x$moving,
+                              type="rigid",
+                              optim="gradientDescent",
+                              metric="mattesMI")$outTx
+    }
+    x$reg$SetMovingInitialTransform(x$init_tf)
+    opt_tf <- AffineTransform(2)
+    x$reg$SetInitialTransform(opt_tf)
+    x
+}
+
+
+register.metric.mattesMI <- function(x) {
+    x$reg$SetMetricAsMattesMutualInformation(
+        numberOfHistogramBins=50)
+    x
+}
+
+
+register.optim.gd <- function(x) {
+    x$reg$SetOptimizerAsGradientDescent(
+        learningRate=1.0,
+        numberOfIterations=100,
+        convergenceMinimumValue=1e-6,
+        convergenceWindowSize=10
+    )
+    x
+}
+
+
+register.optim.lbfgsb <- function(x) {
+    x$reg$SetOptimizerAsLBFGSB(gradientConvergenceTolerance=1e-7,
+        numberOfIterations=100)
+    x
+}
+
+
+register.interpolator.linear <- function(x) {
+    x$reg$SetInterpolator("sitkLinear")
+    x
 }
 
 
@@ -250,8 +285,7 @@ affineRegWithSimpleITK <- function(fixed, moving, init_tf=NULL) {
     reg$SmoothingSigmasAreSpecifiedInPhysicalUnitsOn()
 
     dev_null <- reg$Execute(fixed, moving)
-    # CompositeTransform(opt_tf)$AddTransform(init_tf)
-    # opt_tf
-    list(init_tf=init_tf, opt_tf=opt_tf)
+    opt_tf
+    # list(init_tf=init_tf, opt_tf=opt_tf)
 }
 
