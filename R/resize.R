@@ -35,8 +35,11 @@ PadImageToMatchAspectRatio <- function(img, target_dim=NULL) {
 
 # Pad image to match dims -> img's dims  SHOULD NOT be greater than target dims
 PadImageToMatchDims <- function(img, target_dim=c(200,200)) {
-    if ( any(dim(img)[1:2] > target_dim) ) stop("Dimensions of img are
-                                                 larger than target_dim")
+    if ( any(dim(img)[1:2] > target_dim) ) {
+        print(dim(img))
+        print(target_dim)
+        stop("Dimensions of img are larger than target_dim")
+    }
     dim_diff <- target_dim - dim(img)[1:2]
 
     padding <- c(0, 0, 0, 0) # padding c(bottom, left, top, right)
