@@ -46,7 +46,7 @@ register <- function(fixed, moving,
                      interpolator=c("linear", "bspline", "nearest"),
                      sampling_strategy=c("RANDOM", "REGULAR", "NONE"),
                      sampling_percentage=0.01, initial_transform=NULL,
-                     out_transform=CompositeTransform()
+                     out_transform=c()
                      ) {
     out <- list()
     out$fixed <- fixed
@@ -86,9 +86,9 @@ register <- function(fixed, moving,
                   bspline = register.interpolator.bspline(out),
                   nearest = register.interpolator.nearest(out))
 
-    samplingStrategy <- match.arg(samplingStrategy)
-    out$reg$SetMetricSamplingStrategy(samplingStrategy)
-    out$reg$SetMetricSamplingPercentage(samplingPercentage)
+    sampling_strategy <- match.arg(sampling_strategy)
+    out$reg$SetMetricSamplingStrategy(sampling_strategy)
+    out$reg$SetMetricSamplingPercentage(sampling_percentage)
     out$reg$SetOptimizerScalesFromPhysicalShift()
 
     out$reg$SetShrinkFactorsPerLevel(shrinkFactors = c(4,2,1))
@@ -111,22 +111,27 @@ register.type.rigid <- function(x) {
     if (is.null(x$init_tf)) {
         x <- register.type.center(x)
     }
-    opt_tf <- Euler2DTransform(x$init_tf)
-    x$reg$SetInitialTransform(opt_tf)
+    .tf <- Euler2DTransform(x$init_tf)
+    x$out_tf <- c(x$out_tf, .tf)
+    x$reg$SetInitialTransform(.tf)
     x
 }
 
 
 register.type.affine <- function(x) {
     if (is.null(x$init_tf)) {
-        x$init_tf <- register(x$fixed, x$moving,
-                              type="rigid",
-                              optim="gradientDescent",
-                              metric="mattesMI")$outTx
+        .x <- register(x$fixed, x$moving,
+                       type="rigid",
+                       optim="gradientDescent",
+                       metric="mattesMI",
+                       out_transform=x$out_tf)
+        x$out_tf <- .x$out_tf
+        x$init_tf <- .x$outTx
     }
     x$reg$SetMovingInitialTransform(x$init_tf)
-    opt_tf <- AffineTransform(2)
-    x$reg$SetInitialTransform(opt_tf)
+    .tf <- AffineTransform(2)
+    x$out_tf <- c(x$out_tf, .tf)
+    x$reg$SetInitialTransform(.tf)
     x
 }
 
