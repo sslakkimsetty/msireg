@@ -101,51 +101,54 @@ register <- function(fixed, moving,
 
 
 register.type.center <- function(x) {
-    x$init_tf <- CenteredTransformInitializer(x$fixed, x$moving,
-                                              Euler2DTransform(), "GEOMETRY")
+    tf <- CenteredTransformInitializer(x$fixed, x$moving,
+                                       Euler2DTransform(), "GEOMETRY")
+    x$out_tf <- c(x$out_tf, tf)
     x
 }
 
 
 register.type.rigid <- function(x) {
-    if (is.null(x$init_tf)) {
-        x <- register.type.center(x)
-    }
-    .tf <- Euler2DTransform(x$init_tf)
-    x$out_tf <- c(x$out_tf, .tf)
-    x$reg$SetInitialTransform(.tf)
+    x <- register.type.center(x)
+    x <- composeTransformsInReverseOrder(x)
+    x$reg$SetMovingInitialTransform(x$comp_tf)
+
+    tf <- Euler2DTransform()
+    x$out_tf <- c(x$out_tf, tf)
+    x$reg$SetInitialTransform(tf)
     x
 }
 
 
 register.type.affine <- function(x) {
-    if (is.null(x$init_tf)) {
-        .x <- register(x$fixed, x$moving,
-                       type="rigid",
-                       optim="gradientDescent",
-                       metric="mattesMI",
-                       out_transform=x$out_tf)
-        x$out_tf <- .x$out_tf
-        x$init_tf <- .x$outTx
-    }
-    x$reg$SetMovingInitialTransform(x$init_tf)
-    .tf <- AffineTransform(2)
-    x$out_tf <- c(x$out_tf, .tf)
-    x$reg$SetInitialTransform(.tf)
+    .x <- register(x$fixed, x$moving, type="rigid", optim="gradientDescent",
+                   metric="mattesMI", out_transform=x$out_tf)
+    x$out_tf <- .x$out_tf
+
+    x <- composeTransformsInReverseOrder(x)
+    x$reg$SetMovingInitialTransform(x$comp_tf)
+
+    tf <- AffineTransform(2)
+    x$out_tf <- c(x$out_tf, tf)
+    x$reg$SetInitialTransform(tf)
     x
 }
 
 
 register.type.ffd <- function(x) {
-    if (is.null(x$init_tf)) {
-        x$init_tf <- register(x$fixed, x$moving,
-                              type="rigid",
-                              optim="gradientDescent",
-                              metric="mattesMI")$outTx
-    }
-    x$reg$SetMovingInitialTransform(x$init_tf)
-    opt_tf <- AffineTransform(2)
-    x$reg$SetInitialTransform(opt_tf)
+    .x <- register(x$fixed, x$moving, type="affine", optim="gradientDescent",
+                   metric="mattesMI", out_transform=x$out_tf)
+    x$out_tf <- .x$out_tf
+    x <- composeTransformsInReverseOrder(x)
+    x$reg$SetMovingInitialTransform(x$comp_tf)
+
+    mesh_size <- rep(10, x$fixed$GetDimension())
+    tf <- BSplineTransformInitializer(image1=x$fixed,
+                                      transformDomainMeshSize=mesh_size,
+                                      order=3)
+    x$out_tf <- c(x$out_tf, tf)
+    x$reg$SetInitialTransform(tf)
+    x$bspline <- tf
     x
 }
 
@@ -181,116 +184,19 @@ register.interpolator.linear <- function(x) {
 }
 
 
+composeTransformsInReverseOrder <- function(x, tf_ind=NULL) {
+    tf <- CompositeTransform(x$fixed$GetDimension())
 
-
-
-bsplineRegWithSimpleITK <- function(fixed, moving) {
-    meshSize <- rep(1, moving$GetDimension())
-    init <- BSplineTransformInitializer(fixed, meshSize)
-    init$GetParameters()
-
-    reg <- ImageRegistrationMethod()
-    reg$SetMetricAsMattesMutualInformation()
-    # reg$SetMetricAsJointHistogramMutualInformation()
-    reg$SetOptimizerAsGradientDescentLineSearch(1.0, 100,
-                                                convergenceMinimumValue=1e-5,
-                                                convergenceWindowSize=5)
-
-    reg$SetOptimizerScalesFromPhysicalShift()
-    reg$SetInitialTransform(init, TRUE)
-    reg$SetInterpolator("sitkLinear")
-
-    reg$AddCommand("sitkIterationEvent", function() commandIteration(reg))
-    reg$AddCommand( "sitkMultiResolutionIterationEvent", function() commandMultiIteration(reg) )
-
-    reg$SetOptimizerScalesFromPhysicalShift()
-    reg$SetShrinkFactorsPerLevel(c(4,2,1))
-    reg$SetSmoothingSigmasPerLevel(c(4,2,1))
-
-    outTx <- reg$Execute(fixed, moving)
-    outTx
+    if (is.null(tf_ind)) {
+        tf_ind <- rev(seq_along(along.with=x$out_tf))
+    } else {
+        tf_ind <- rev(tf_ind)
+    }
+    . <- sapply(tf_ind, function(y) {
+        tf$AddTransform(x$out_tf[[y]])
+    })
+    x$comp_tf <- tf
+    x
 }
 
-
-initTransform <- function(fixed, moving) {
-    CenteredTransformInitializer(fixed, moving,
-                                 Euler2DTransform(), "GEOMETRY")
-}
-
-
-euler2DRegWithSimpleITK <- function(fixed, moving, init_tf=NULL) {
-    reg <- ImageRegistrationMethod()
-
-    # Similarity metric settings
-    reg$SetMetricAsMattesMutualInformation(
-        numberOfHistogramBins=50)
-    reg$SetMetricSamplingStrategy("RANDOM")
-    reg$SetMetricSamplingPercentage(0.01)
-
-    reg$SetInterpolator("sitkLinear")
-
-    # Optimizer settings
-    reg$SetOptimizerAsGradientDescent(
-        learningRate=1.0,
-        numberOfIterations=100,
-        convergenceMinimumValue=1e-6,
-        convergenceWindowSize=10
-    )
-    reg$SetOptimizerScalesFromPhysicalShift()
-
-    if (is.null(init_tf)) init_tf <- initTransform(fixed, moving)
-
-    # reg$SetMovingInitialTransform(init_tf)
-    # opt_tf <- Euler2DTransform()
-    # reg$SetInitialTransform(opt_tf)
-
-    opt_tf <- Euler2DTransform(init_tf)
-    reg$SetInitialTransform(opt_tf)
-
-    # Setup for the multi-resolution framework
-    reg$SetShrinkFactorsPerLevel(shrinkFactors = c(4,2,1))
-    reg$SetSmoothingSigmasPerLevel(smoothingSigmas=c(2,1,0))
-    reg$SmoothingSigmasAreSpecifiedInPhysicalUnitsOn()
-
-    dev_null <- reg$Execute(fixed, moving)
-    # CompositeTransform(Transform(opt_tf))$AddTransform(init_tf)
-    opt_tf
-}
-
-
-affineRegWithSimpleITK <- function(fixed, moving, init_tf=NULL) {
-    reg <- ImageRegistrationMethod()
-
-    # Similarity metric settings
-    reg$SetMetricAsMattesMutualInformation(
-        numberOfHistogramBins=50)
-    reg$SetMetricSamplingStrategy("RANDOM")
-    reg$SetMetricSamplingPercentage(0.01)
-
-    reg$SetInterpolator("sitkLinear")
-
-    # Optimizer settings
-    reg$SetOptimizerAsGradientDescent(
-        learningRate=1.0,
-        numberOfIterations=100,
-        convergenceMinimumValue=1e-6,
-        convergenceWindowSize=10
-    )
-    reg$SetOptimizerScalesFromPhysicalShift()
-
-    if (is.null(init_tf)) init_tf <- euler2DRegWithSimpleITK(fixed, moving)
-
-    reg$SetMovingInitialTransform(init_tf)
-    opt_tf <- AffineTransform(2)
-    reg$SetInitialTransform(opt_tf)
-
-    # Setup for the multi-resolution framework
-    reg$SetShrinkFactorsPerLevel(shrinkFactors = c(4,2,1))
-    reg$SetSmoothingSigmasPerLevel(smoothingSigmas=c(2,1,0))
-    reg$SmoothingSigmasAreSpecifiedInPhysicalUnitsOn()
-
-    dev_null <- reg$Execute(fixed, moving)
-    opt_tf
-    # list(init_tf=init_tf, opt_tf=opt_tf)
-}
 
