@@ -1,50 +1,72 @@
 
 
-overlayGridOnImage <- function(img, scale_factor=4) {
-    out <- constructNDGrid(img, scale_factor=scale_factor) 
+overlayGridOnImage <- function(img, color="#ffffff",
+                               scale_factor=4, overlay_weight=0.8) {
+    out <- list()
+    grid <- constructNDGrid(img, scale_factor=scale_factor)
 
     colormode <- Grayscale
-    if (length(dim(img)) > 2) colormode <- Color 
-    
-    out <- Image(out, colormode=colormode) 
-    out <- resizeAndPadImageToMatchDims(out, dim(img)[1:2]) 
+    if (length(dim(img)) > 2) colormode <- Color
 
-    overlay_weight <- 0.8 
-    img * overlay_weight + out * (1 - overlay_weight)
+    grid <- Image(grid, colormode=colormode)
+    grid <- resizeAndPadImageToMatchDims(grid, dim(img)[1:2])
+    grid <- normalizeImage(grid)
+
+    out$grid <- .addColorToImage(img=grid, color=color)
+    out$overlay <- img * overlay_weight + grid * (1 - overlay_weight)
+    out$color_overlay <- .addColorToImage(img) * overlay_weight +
+        .addColorToImage(grid) * (1 - overlay_weight)
+    out
 }
 
 
-constructNDGrid <- function(img, scale_factor=4) { 
-    dim <- dim(img) 
-    dim[1:2] <- dim(img)[1:2] * scale_factor 
-    out <- .construct2DGrid(dim=dim[1:2]) 
+constructNDGrid <- function(img, scale_factor=4) {
+    dim <- dim(img)
+    dim[1:2] <- dim(img)[1:2] * scale_factor
+    out <- .construct2DGrid(dim=dim[1:2])
 
     if (length(dim) > 2) {
-        out <- array(rep(out, dim[3]), dim=dim) 
-        if (dim[3] == 4) out[, , 4] <- 1 
+        out <- array(rep(out, dim[3]), dim=dim)
+        if (dim[3] == 4) out[, , 4] <- 1
     }
-    out 
+    out
 }
 
 
-.construct2DGrid <- function(dim=c(200,200)) { 
-    w <- dim[1] 
+.construct2DGrid <- function(dim=c(200,200)) {
+    w <- dim[1]
     h <- dim[2]
-    img <- matrix(0, nrow=dim[1], ncol=dim[2]) 
-    
-    x <- c(1:w) 
-    y <- seq(from=1, by=10, length.out=floor(h/10)) 
+    img <- matrix(0, nrow=dim[1], ncol=dim[2])
+
+    x <- c(1:w)
+    y <- seq(from=1, by=10, length.out=floor(h/10))
     img <- .modifyGridMatrix(img, x, y)
 
-    x <- seq(from=1, by=10, length.out=floor(w/10)) 
-    y <- c(1:h) 
-    img <- .modifyGridMatrix(img, x, y) 
+    x <- seq(from=1, by=10, length.out=floor(w/10))
+    y <- c(1:h)
+    img <- .modifyGridMatrix(img, x, y)
     img
-} 
+}
 
 
 .modifyGridMatrix <- function(img, x, y, c) {
     coords <- as.matrix(expand.grid(x, y, KEEP.OUT.ATTRS=TRUE))
-    img[coords] <- 1 
-    img 
+    img[coords] <- 1
+    img
 }
+
+
+.addColorToImage <- function(img, color="#ffffff") {
+    dim <- dim(img)
+    channels <- 3
+
+    color_vec <- as.vector(col2rgb(color) / 255)
+    color_arr <- array(rep(color_vec, prod(dim(img))),
+                       dim=c(dim(img), 3)[c(3,1,2)])
+    color_arr <- aperm(color_arr, c(2,3,1))
+
+    img_arr <- array(rep(imageData(img), 3), dim=c(dim(img), 3))
+    Image(img_arr * color_arr, colormode=Color)
+}
+
+
