@@ -7,7 +7,8 @@
 
 coregister <- function(mse, opt, mse_roi=NULL, opt_roi=NULL,
                        SSC=TRUE, mz_list=NULL, spatial_scale=1,
-                       verbose=FALSE) {
+                       verbose=FALSE, ...) {
+    dots <- list(...)
     mse <- Cardinal::process(mse) # <- process pending operations, if any
     mse_attrs <- list(
         nX = dims(mse)[1], nY = dims(mse)[2],
@@ -89,9 +90,13 @@ coregister <- function(mse, opt, mse_roi=NULL, opt_roi=NULL,
                                spatial_scale=spatial_scale)
 
     # Registration
-    out$reg <- .coregister(out$fixed, out$moving, type="ffd",
-                           optim="gradientDescent",
-                           metric="mattesMI", interpolator="linear")
+    type <- c(dots$type, "ffd")[1]
+    optim <- c(dots$optim, "gradientDescent")[1]
+    metric <- c(dots$metric, "mattesMI")[1]
+    interpolator <- c(dots$interpolator, "linear")[1]
+    out$reg <- .coregister(out$fixed, out$moving, type=type,
+                           optim=optim, metric=metric,
+                           interpolator=interpolator)
     out
 }
 
