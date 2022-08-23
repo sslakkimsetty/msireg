@@ -37,21 +37,18 @@ commandMultiIteration <- function(method) {
 }
 
 
-register <- function(fixed, moving,
-                     type=c("center", "rigid", "affine", "ffd"),
-                     optim=c("gradientDescent", "gradientDescentLineSearch",
-                                 "lbfgsb", "lbfgs2", "amoeba", "powell"),
-                     metric=c("correlation", "demons", "jointHistogramMI",
-                              "meanSquares", "mattesMI"),
-                     interpolator=c("linear", "bspline", "nearest"),
-                     sampling_strategy=c("RANDOM", "REGULAR", "NONE"),
-                     sampling_percentage=0.01, initial_transform=NULL,
-                     out_transform=c()
-                     ) {
+.coregister <- function(fixed, moving,
+                        type=c("center", "rigid", "affine", "ffd"),
+                        optim=c("gradientDescent", "gradientDescentLineSearch",
+                                "lbfgsb", "lbfgs2", "amoeba", "powell"),
+                        metric=c("correlation", "demons", "jointHistogramMI",
+                                 "meanSquares", "mattesMI"),
+                        interpolator=c("linear", "bspline", "nearest"),
+                        sampling_strategy=c("RANDOM", "REGULAR", "NONE"),
+                        sampling_percentage=0.01, out_transform=c()) {
     out <- list()
     out$fixed <- fixed
     out$moving <- moving
-    out$init_tf <- initial_transform
     out$out_tf <- out_transform
     out$reg <- ImageRegistrationMethod()
 
@@ -95,7 +92,12 @@ register <- function(fixed, moving,
     out$reg$SetSmoothingSigmasPerLevel(smoothingSigmas=c(4,2,1))
     out$reg$SmoothingSigmasAreSpecifiedInPhysicalUnitsOn()
 
+    # Execute the registration method
     out$outTx <- out$reg$Execute(fixed, moving)
+
+    # Build a composite transform from individual transformations
+    out <- composeTransformsInReverseOrder(out)
+
     out
 }
 
@@ -111,7 +113,7 @@ register.type.center <- function(x) {
 register.type.rigid <- function(x) {
     x <- register.type.center(x)
     x <- composeTransformsInReverseOrder(x)
-    x$reg$SetMovingInitialTransform(x$comp_tf)
+    x$reg$SetMovingInitialTransform(x$TF)
 
     tf <- Euler2DTransform()
     x$out_tf <- c(x$out_tf, tf)
@@ -121,12 +123,12 @@ register.type.rigid <- function(x) {
 
 
 register.type.affine <- function(x) {
-    .x <- register(x$fixed, x$moving, type="rigid", optim="gradientDescent",
-                   metric="mattesMI", out_transform=x$out_tf)
+    .x <- .coregister(x$fixed, x$moving, type="rigid", optim="gradientDescent",
+                      metric="mattesMI", out_transform=x$out_tf)
     x$out_tf <- .x$out_tf
 
     x <- composeTransformsInReverseOrder(x)
-    x$reg$SetMovingInitialTransform(x$comp_tf)
+    x$reg$SetMovingInitialTransform(x$TF)
 
     tf <- AffineTransform(2)
     x$out_tf <- c(x$out_tf, tf)
@@ -136,11 +138,11 @@ register.type.affine <- function(x) {
 
 
 register.type.ffd <- function(x) {
-    .x <- register(x$fixed, x$moving, type="affine", optim="gradientDescent",
-                   metric="mattesMI", out_transform=x$out_tf)
+    .x <- .coregister(x$fixed, x$moving, type="affine", optim="gradientDescent",
+                      metric="mattesMI", out_transform=x$out_tf)
     x$out_tf <- .x$out_tf
     x <- composeTransformsInReverseOrder(x)
-    x$reg$SetMovingInitialTransform(x$comp_tf)
+    x$reg$SetMovingInitialTransform(x$TF)
 
     mesh_size <- rep(10, x$fixed$GetDimension())
     tf <- BSplineTransformInitializer(image1=x$fixed,
@@ -148,7 +150,6 @@ register.type.ffd <- function(x) {
                                       order=3)
     x$out_tf <- c(x$out_tf, tf)
     x$reg$SetInitialTransform(tf)
-    x$bspline <- tf
     x
 }
 
@@ -195,7 +196,7 @@ composeTransformsInReverseOrder <- function(x, tf_ind=NULL) {
     . <- sapply(tf_ind, function(y) {
         tf$AddTransform(x$out_tf[[y]])
     })
-    x$comp_tf <- tf
+    x$TF <- tf
     x
 }
 
