@@ -6,7 +6,8 @@
 
 
 coregister <- function(mse, opt, mse_roi=NULL, opt_roi=NULL,
-                       SSC=TRUE, mz_list=NULL, verbose=FALSE) {
+                       SSC=TRUE, mz_list=NULL, spatial_scale=1,
+                       verbose=FALSE) {
     mse <- Cardinal::process(mse) # <- process pending operations, if any
     mse_attrs <- list(
         nX = dims(mse)[1], nY = dims(mse)[2],
@@ -77,42 +78,21 @@ coregister <- function(mse, opt, mse_roi=NULL, opt_roi=NULL,
         msimg <- .Rtsne(ints[t(mse_roi), ], tissue=mse_roi,
                         attrs=mse_attrs)
     }
-    print(dim(msimg))
-    msimg <- normalizeImage(msimg, contrast.enhance="histogram")
 
     # Optical image stuff
     if (is.null(opt_roi)) {
         opt_roi <- drawROIOnImage(opt)
     }
-    opt <- applyROIonImage(opt, opt_roi)
-    opt <- resizeAndPadImageToMatchDims(opt, dim(msimg)[1:2])
-    opt <- normalizeImage(opt, contrast.enhance="histogram")
 
-    # Convert to grayscale images
-    # opt <- channel(opt, "luminance")
-    # msimg <- channel(msimg, "luminance")
-
-    # SimpleITK init
-    fixed <- SimpleITK::as.image(imageData(opt), isVector=FALSE)
-    moving <- SimpleITK::as.image(imageData(msimg), isVector=FALSE)
-
-    list(opt=opt, msimg=msimg, fixed=fixed, moving=moving)
-    # Registration
-    # coregisterWithSimpleITK(fixed, moving)
-}
-
-
-..coregister <- function(mse, opt, mse_roi=NULL, opt_roi=NA,
-                         SSC=TRUE, mz_list=NULL, verbose=FALSE, .data=NULL) {
-    fixed <- .data$fixed
-    moving <- .data$moving
+    # Process and put the necessary data into a list
+    out <- prepareDataForCoreg(msimg, opt, mse_roi=mse_roi, opt_roi=opt_roi,
+                               spatial_scale=spatial_scale)
 
     # Registration
-    outTx <- coregisterWithSimpleITK(fixed, moving)
-    list(
-        fixed=fixed, moving=moving,
-        outTx=outTx
-    )
+    out$reg <- .coregister(out$fixed, out$moving, type="ffd",
+                           optim="gradientDescent",
+                           metric="mattesMI", interpolator="linear")
+    out
 }
 
 
@@ -163,7 +143,35 @@ intensityMatrix2D <- function(mse, byrow=TRUE) {
 }
 
 
+prepareDataForCoreg <- function(msimg, opt, mse_roi=NULL, opt_roi=NULL,
+                                spatial_scale=1) {
+    out <- list()
+    out$OPT <- opt
+    out$MSIMG <- msimg
 
+    DIM <- dim(msimg)[1:2] * spatial_scale
+    opt <- applyROIOnImage(opt, opt_roi)
+    opt <- normalizeImage(opt, contrast.enhance="histogram")
+    opt <- resizeAndPadImageToMatchDims(opt[, , 1:3], DIM)
+
+    msimg <- applyROIOnImage(msimg, mse_roi)
+    msimg <- normalizeImage(msimg, contrast.enhance="histogram")
+    msimg <- resizeAndPadImageToMatchDims(msimg, DIM)
+
+    opt <- channel(opt, "luminance")
+    msimg <- channel(msimg, "luminance")
+
+    # SimpleITK init
+    fixed <- SimpleITK::as.image(imageData(opt), isVector=FALSE)
+    moving <- SimpleITK::as.image(imageData(msimg), isVector=FALSE)
+
+    out$opt <- opt
+    out$msimg <- msimg
+    out$fixed <- fixed
+    out$moving <- moving
+
+    out
+}
 
 
 
