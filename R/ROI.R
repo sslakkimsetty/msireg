@@ -69,8 +69,7 @@ multiSelectROI <- function(mse, mz, rasterize=TRUE, ...) {
     while (sel) {
         .roi <- selectROI(mse, mz=mz, ...)
         roi <- (roi | .roi)
-        sel <- askYesNo("Do you want to select another
-            ROI on the same tissue?")
+        sel <- askYesNo("Do you want to select another ROI on the same tissue?")
     }
 
     if (rasterize) rasterizeROIFromCardinal(mse, roi)
