@@ -23,4 +23,5 @@ Imports:
     EBImage,
     graphics,
     Rtsne,
-    SimpleITK
+    SimpleITK, 
+    sp
