@@ -7,7 +7,7 @@
 
 coregister <- function(mse, opt, mse_roi=NULL, opt_roi=NULL,
                        SSC=TRUE, mz_list=NULL, spatial_scale=1,
-                       verbose=FALSE, ...) {
+                       BPPARAM=SerialParam(), verbose=FALSE, ...) {
     dots <- list(...)
     mse <- Cardinal::process(mse) # <- process pending operations, if any
     mse_attrs <- list(
@@ -61,7 +61,7 @@ coregister <- function(mse, opt, mse_roi=NULL, opt_roi=NULL,
         # Perform SSC
         message("filtering features ... ")
         message("performing spatial shrunken centroids ... \n")
-        topf <- sort(.SSC(mse)$topf)
+        topf <- sort(.SSC(mse, BPPARAM)$topf)
         fid <- features(mse, mz=topf)
     }
 
@@ -101,10 +101,12 @@ coregister <- function(mse, opt, mse_roi=NULL, opt_roi=NULL,
 }
 
 
-.SSC <- function(mse) {
-    ssc <- spatialShrunkenCentroids(mse, r=c(0,1,2), s=c(3), k=c(15,20),
-                                    method="gaussian",
-                                    BPPARAM=BiocParallel::MulticoreParam())
+.SSC <- function(mse, BPPARAM=SerialParam()) {
+    old <- .Random.seed
+    on.exit({ .Random.seed <<- old })
+    set.seed(2)
+    ssc <- spatialShrunkenCentroids(mse, r=c(0,1,2), s=c(3), k=c(15),
+                                    method="gaussian", BPPARAM=BPPARAM)
     topf <- matrix(vector("numeric", 30*3*1*2), nrow=3*1*2)
     . <- sapply(1:3*1*2, function(x) {
         md <- modelData(ssc)[x, ]
