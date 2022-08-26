@@ -1,9 +1,45 @@
+
+#' Co-registers MS imaging data with microscopic optical images
+#'
+#' `coregister()` processes and summarizes MS imaging data and optical images
+#' to make it feasible to apply `SimpleITK`'s family of registration methods.
+#' This method uses spatial shrunken centroids method from `Cardinal` to
+#' filtering out unimportant features.
+#'
+#' @param mse The Mass Spectrometry (MS) imaging data.
+#' @param opt The optical image of class `EBImage::Image`.
+#' @param mse_roi A binary mask identifying the  tissue or region-of-interest
+#'     on the MS image.
+#' @param opt_roi A binary mask identifying the tissue or region-of-interest
+#'     on the optical image.
+#' @param SSC A logical flag (default = TRUE); whether to perform Spatial
+#'     Shrunken Centroids method from `Cardinal` for feature selection.
+#' @param mz_list A vector of mass / charge (mz) values (defualt = NULL); SSC
+#'     will be skipped and the `mz_list` will be passed for dimensionality
+#'     reduction.
+#' @param spatial_scale Factor with respect to MS image's spatial dimensions
+#'     (default = 1); co-registration will be performed at this scale.
+#' @param BPPARAM `BiocParallelParam` specification (default = `SerialParam()`);
+#'     See documentation for `bplapply`.
+#' @param verbose A logical flag (default=FALSE); whether updates shoule be
+#'     printed.
+#' @param ... Keyword arguments passed to `SimpleITK`'s registration methods.
+#'
+#' @return A list of items
+#'     Summarized MS image at its original spatial resolution
+#'     Processed optical image at its original spatial resolution
+#'     Summarized MS image at scaled spatial resolution
+#'     Processed optical image at its scaled spatial resolution
+#'     Registration object from SimpleITK
+#'     Composite transform of the registration
+#'
 #' @import SimpleITK
 #' @import Cardinal
 #' @import EBImage
 #' @import Rtsne
 #' @import BiocParallel
-
+#' @export
+#'
 
 coregister <- function(mse, opt, mse_roi=NULL, opt_roi=NULL,
                        SSC=TRUE, mz_list=NULL, spatial_scale=1,
@@ -32,7 +68,7 @@ coregister <- function(mse, opt, mse_roi=NULL, opt_roi=NULL,
     if (!isFull & is.null(mse_roi)) {
         message("Co-registration performs better on images with their backgrounds removed ...")
         message("Inferring tissue to be the pixels present ... \n")
-        mse_roi <- constructROIFromMSIImage(mse, pars=mse_attrs)
+        mse_roi <- constructROIFromMSIImage(mse, attrs=mse_attrs)
     }
 
     # 3. [Are some pixels missing] AND [is mse_roi not NA]?
@@ -61,7 +97,7 @@ coregister <- function(mse, opt, mse_roi=NULL, opt_roi=NULL,
         # Perform SSC
         message("filtering features ... ")
         message("performing spatial shrunken centroids ... \n")
-        topf <- sort(.SSC(mse, BPPARAM)$topf)
+        topf <- .SSC(mse, BPPARAM)$topf
         fid <- features(mse, mz=topf)
     }
 
@@ -107,13 +143,17 @@ coregister <- function(mse, opt, mse_roi=NULL, opt_roi=NULL,
     set.seed(2)
     ssc <- spatialShrunkenCentroids(mse, r=c(0,1,2), s=c(3), k=c(15),
                                     method="gaussian", BPPARAM=BPPARAM)
-    topf <- matrix(vector("numeric", 30*3*1*2), nrow=3*1*2)
-    . <- sapply(1:3*1*2, function(x) {
+    topf <- matrix(vector("numeric", 30*3), nrow=3)
+    . <- sapply(1:3, function(x) {
         md <- modelData(ssc)[x, ]
         tops <- topFeatures(ssc, n=30, model=list(r=md$r, s=md$s, k=md$k))$mz
         topf[x, ] <<- tops
     })
-    list(ssc=ssc, topf=sort(unique(as.vector(topf))))
+
+    list(
+        ssc = ssc,
+        topf = sort(unique(as.vector(topf)))
+    )
 }
 
 
