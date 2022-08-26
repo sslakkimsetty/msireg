@@ -1,27 +1,29 @@
 Package: msireg
-Title: Co-registration of Mass Spectrometry Images and Optical Images Using SimpleITK
+Title: Co-registration of Optical and Mass Spectrometry Images Using
+    'SimpleITK'
 Version: 0.0.0.9000
 Authors@R: 
-    person(
-        "Sai Srikanth", "Lakkimsetty", 
-        email = "saislakkimsetty@gmail.com", 
-        role = c("aut", "cre")
-    )
-Description: Co-registration of high dimensional mass spectrometry images with H&E stained 
-    microscopic (optical) images by applying dimensionality reduction and using registration 
-    methods from SimpleITK package. 
-License: MIT + file LICENSE
-Encoding: UTF-8
-Roxygen: list(markdown = TRUE)
-RoxygenNote: 7.2.1
-Suggests: 
-    testthat (>= 3.0.0)
-Config/testthat/edition: 3
+    person("Sai Srikanth", "Lakkimsetty", , "saislakkimsetty@gmail.com", role = c("aut", "cre"),
+           comment = c(ORCID = "0000-0001-9552-1121"))
+Description: Co-registers high dimensional mass spectrometry images with
+    optical images (H&E stained, AF) using the framework 'SimpleITK'.
+License: GPL (>= 3)
+URL: https://github.com/sslakkimsetty/msireg
+BugReports: https://github.com/sslakkimsetty/msireg/issues
 Imports: 
     BiocParallel,
     Cardinal,
     EBImage,
     graphics,
     Rtsne,
-    SimpleITK, 
+    SimpleITK,
     sp
+Suggests: 
+    testthat (>= 3.0.0) 
+    knitr
+Remotes: 
+    github::SimpleITK/SimpleITKRInstaller
+Config/testthat/edition: 3
+Encoding: UTF-8
+Roxygen: list(markdown = TRUE)
+RoxygenNote: 7.2.1
