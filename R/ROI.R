@@ -1,5 +1,53 @@
+
+
+#' Select multiple regions-of-interest on Mass Spectrometry image
+#'
+#' @param mse The imaging dataset to select ROI
+#' @param mz An example ion image with mass / charge (mz) to display; passed
+#'     over to `Cardinal::image()` function
+#' @param rasterize A logical flag (default = TRUE); whether to rasterize the
+#'     ROI (affects the cases only where MS image is not rectangular).
+#' @param ... Passed to `Cardinal::selectROI()`
+#'
+#' @return Returns the ROI as a logical matrix if `rasterize` is TRUE or a
+#'     logical vector if `rasterize` is FALSE
+#'
 #' @importFrom graphics locator points polygon
 #' @importFrom sp point.in.polygon
+#' @export
+#'
+
+
+multiSelectROI <- function(mse, mz, rasterize=TRUE, ...) {
+    sel <- TRUE
+    roi <- rep(FALSE, dim(mse)[2])
+
+    while (sel) {
+        .roi <- selectROI(mse, mz=mz, ...)
+        roi <- (roi | .roi)
+        sel <- askYesNo("Do you want to select another ROI on the same tissue?")
+    }
+
+    if (rasterize) rasterizeROIFromCardinal(mse, roi)
+    else roi
+}
+
+
+multiDrawROI <- function(img) {
+    nX <- dim(img)[1]
+    nY <- dim(img)[2]
+
+    sel <- TRUE
+    roi <- matrix(FALSE, nrow=nX, ncol=nY)
+
+    while (sel) {
+        .roi <- drawROIOnImage(img)
+        roi <- (roi | .roi)
+        sel <- askYesNo("Do you want to select another
+            ROI on the same tissue?")
+    }
+    roi
+}
 
 
 rasterizeROIFromCardinal <- function(mse, roi, byrow=FALSE) {
@@ -60,39 +108,4 @@ applyROIOnImage <- function(img, roi) {
     out <- Reduce("*", list(imageData(img), roi))
     Image(out, colormode=colormode)
 }
-
-
-multiSelectROI <- function(mse, mz, rasterize=TRUE, ...) {
-    sel <- TRUE
-    roi <- rep(FALSE, dim(mse)[2])
-
-    while (sel) {
-        .roi <- selectROI(mse, mz=mz, ...)
-        roi <- (roi | .roi)
-        sel <- askYesNo("Do you want to select another ROI on the same tissue?")
-    }
-
-    if (rasterize) rasterizeROIFromCardinal(mse, roi)
-    else roi
-}
-
-
-multiDrawROI <- function(img) {
-    nX <- dim(img)[1]
-    nY <- dim(img)[2]
-
-    sel <- TRUE
-    roi <- matrix(FALSE, nrow=nX, ncol=nY)
-
-    while (sel) {
-        .roi <- drawROIOnImage(img)
-        roi <- (roi | .roi)
-        sel <- askYesNo("Do you want to select another
-            ROI on the same tissue?")
-    }
-    roi
-}
-
-
-
 
