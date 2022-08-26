@@ -33,6 +33,18 @@ multiSelectROI <- function(mse, mz, rasterize=TRUE, ...) {
 }
 
 
+#' Select multiple regions-of-interest on optical image
+#'
+#' @param img An `EBImage::Image` object to select ROI on
+#'
+#' @return Returns the ROI as a logical matrix of the same spatial dimensions
+#'     as `img`
+#'
+#' @importFrom graphics locator points polygon
+#' @importFrom sp point.in.polygon
+#' @export
+#'
+
 multiDrawROI <- function(img) {
     nX <- dim(img)[1]
     nY <- dim(img)[2]
