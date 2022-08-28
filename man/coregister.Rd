@@ -57,7 +57,7 @@ Composite transform of the registration
 }
 \description{
 \code{coregister()} processes and summarizes MS imaging data and optical images
-to make it feasible to apply \code{SimpleITK}'s family of registration methods.
+to and registers them using \code{SimpleITK}'s family of registration methods.
 This method uses spatial shrunken centroids method from \code{Cardinal} to
 filtering out unimportant features.
 }

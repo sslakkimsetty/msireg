@@ -2,7 +2,7 @@
 % Please edit documentation in R/ROI.R
 \name{multiSelectROI}
 \alias{multiSelectROI}
-\title{Select multiple regions-of-interest on Mass Spectrometry image}
+\title{Select multiple regions-of-interest (ROIs) on Mass Spectrometry image}
 \usage{
 multiSelectROI(mse, mz, rasterize = TRUE, ...)
 }
@@ -22,5 +22,6 @@ Returns the ROI as a logical matrix if \code{rasterize} is TRUE or a
 logical vector if \code{rasterize} is FALSE
 }
 \description{
-Select multiple regions-of-interest on Mass Spectrometry image
+\code{multiSelectROI()} extends the \code{Cardinal::selectROI()} method to
+allow selction of multiple disconnected tissues in the image.
 }
