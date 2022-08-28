@@ -95,9 +95,9 @@ drawROIOnImage <- function(img) {
 } 
 
 
-#' Helper function to draw marks, lines and finally the polygon 
-#'     as the user selects points using the ROI methods 
-#'     - function taken from the Cardinal package
+# Helper function to draw marks, lines and finally the polygon 
+#     as the user selects points using the ROI methods 
+#     - function taken from the Cardinal package
 .locator <- function() {
     xs <- numeric()
     ys <- numeric()
@@ -138,10 +138,10 @@ applyROIOnImage <- function(img, roi) {
 }
 
 
-#' `Cardinal::selectROI()` returns a logical vector of length equal 
-#'     to the existing pixels. `rasterizeROIFromCardinal()` builds 
-#'     a rasterized matrix of ROI (binary mask) using coord data 
-#'     from `mse`
+# `Cardinal::selectROI()` returns a logical vector of length equal 
+#     to the existing pixels. `rasterizeROIFromCardinal()` builds 
+#     a rasterized matrix of ROI (binary mask) using coord data 
+#     from `mse`
 
 rasterizeROIFromCardinal <- function(mse, roi, byrow=FALSE) {
     out <- matrix(rep(FALSE, prod(dims(mse))), nrow=dims(mse)[1])
@@ -153,8 +153,8 @@ rasterizeROIFromCardinal <- function(mse, roi, byrow=FALSE) {
 }
 
 
-#' If ROI is not provided in arguments of `msireg::coregister()`, ROI 
-#'     is inferred to be the existing pixels in the MSI data. 
+# If ROI is not provided in arguments of `msireg::coregister()`, ROI 
+#     is inferred to be the existing pixels in the MSI data. 
 
 constructROIFromMSIImage <- function(mse, attrs=NULL) {
     roi <- matrix(rep(FALSE, attrs$nX * attrs$nY), ncol=attrs$nY)
