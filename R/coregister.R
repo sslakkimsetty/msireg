@@ -36,7 +36,7 @@
 #' @import Cardinal
 #' @import EBImage
 #' @import Rtsne
-#' @import BiocParallel 
+#' @import BiocParallel
 #' @import SimpleITK
 #' @export
 #'
@@ -49,42 +49,40 @@ coregister <- function(mse, opt, mse_roi=NULL, opt_roi=NULL,
         nX = dims(mse)[1], nY = dims(mse)[2],
         nF = dim(mse)[1], nP = dim(mse)[2],
         nXo = dim(opt)[1], nYo = dim(opt)[2]
-    ) 
+    )
     attrs$isFull <- ( (attrs$nX * attrs$nY) == (attrs$nP) )
 
     ########## ROI stuff ##########
 
     # Creates or (checks and modifies) MSI ROI to be in raster format
-    mse_roi <- .validMSIROI(mse, mse_roi, attrs, mz=mz(mse)[1]) 
+    mse_roi <- .validMSIROI(mse, mse_roi, attrs, mz=mz(mse)[1], verbose=verbose)
 
     # Creates or (checks and modifies) OPT ROI to be in raster format
     opt_roi <- .validOPTROI(opt, opt_roi, attrs)
 
-    return(0)
-
     ########## Filtering features ##########
 
-    # Filter features 
-    mz_list <- unique(mz_list) 
+    # Filter features
+    mz_list <- unique(mz_list)
 
     if (!is.null(mz_list)) {
         if (length(mz_list) < 3) {
             stop("length of mz_list has to be 3 at least \n")
-        } else { 
+        } else {
             if (verbose) {
-                message("selecting features from m/z list ... \n") 
+                message("selecting features from m/z list ... \n")
                 message("skipping SSC ... \n")
             }
             fid <- sort(features(mse, mz=mz_list))
         }
     } else {
-        # Perform SSC 
-        if (verbose) message("filtering features ... \n") 
+        # Perform SSC
+        if (verbose) message("filtering features ... \n")
 
         message("performing spatial shrunken centroids ... \n")
         topf <- .SSC(mse, BPPARAM=BPPARAM)$topf
         fid <- features(mse, mz=topf)
-    } 
+    }
 
 
     ########## Dimensionality reduction ##########
@@ -98,9 +96,9 @@ coregister <- function(mse, opt, mse_roi=NULL, opt_roi=NULL,
         msimg <- array(ints, dim=c(attrs$nY, attrs$nX, 3))
         msimg <- Image(aperm(msimg, perm=c(2,1,3)), colormode=Color)
     } else {
-        # t-SNE representation 
+        # t-SNE representation
         if (verbose) message("performing tsne ... \n")
-        msimg <- .Rtsne(ints[t(mse_roi), ], roi=mse_roi, 
+        msimg <- .Rtsne(ints[t(mse_roi), ], roi=mse_roi,
             attrs=attrs)
     }
 
@@ -108,53 +106,55 @@ coregister <- function(mse, opt, mse_roi=NULL, opt_roi=NULL,
     ########## Registration ##########
 
     # Process and put the necessary data into a list
-    out <- prepareDataForCoreg(msimg, opt, mse_roi=mse_roi, 
+    out <- prepareDataForCoreg(msimg, opt, mse_roi=mse_roi,
         opt_roi=opt_roi, spatial_scale=spatial_scale)
 
     # Registration
     type <- c(dots$type, "ffd")[1]
     optim <- c(dots$optim, "gradientDescent")[1]
     metric <- c(dots$metric, "mattesMI")[1]
-    interpolator <- c(dots$interpolator, "linear")[1] 
+    interpolator <- c(dots$interpolator, "linear")[1]
 
     out$reg <- .coregister(out$fixed, out$moving, type=type,
                            optim=optim, metric=metric,
                            interpolator=interpolator)
-    
+
     out
 }
 
 
-# `.validMSIROI()` validates the MSI ROI and rasterizes if needed. If 
-# ROI is not passed, it builds a ROI matrix from MSI image automatically 
-# or have the user select ROI. 
-.validMSIROI <- function(mse, mse_roi=NULL, mz=NULL, attrs=NULL) { 
-    .m1 <- paste0("ROI of the MSI image is passed ", 
-        "incorrectly (incorrect size). Select ROI using your ", 
-        "mouse and press `Esc` when finished ... \n") 
-    .m2 <- paste0("Co-registration performs better on images ", 
-        "with their backgrounds removed ... \n", 
-        "Select ROI using your mouse and press ", 
-        "`Esc` when finished ... \n") 
-    .m31 <- paste0("Co-registration performs better on images ", 
-        "with their backgrounds removed ... \n") 
-    .m32 <- paste0("Do you want to automatically select ROI to ", 
+# `.validMSIROI()` validates the MSI ROI and rasterizes if needed. If
+# ROI is not passed, it builds a ROI matrix from MSI image automatically
+# or have the user select ROI.
+
+#' @importFrom utils askYesNo
+.validMSIROI <- function(mse, mse_roi=NULL, mz=NULL, attrs=NULL, verbose=FALSE) {
+    .m1 <- paste0("ROI of the MSI image is passed ",
+        "incorrectly (incorrect size). Select ROI using your ",
+        "mouse and press `Esc` when finished ... \n")
+    .m2 <- paste0("Co-registration performs better on images ",
+        "with their backgrounds removed ... \n",
+        "Select ROI using your mouse and press ",
+        "`Esc` when finished ... \n")
+    .m31 <- paste0("Co-registration performs better on images ",
+        "with their backgrounds removed ... \n")
+    .m32 <- paste0("Do you want to automatically select ROI to ",
             "be the pixels present?")
-    .m33 <- paste0("Inferring tissue to be the pixels present ... \n") 
+    .m33 <- paste0("Inferring tissue to be the pixels present ... \n")
 
-    isFull <- attrs$isFull 
+    isFull <- attrs$isFull
 
-    # 1. ( [Are all pixels present] AND [is mse_roi provided] ) OR 
-    #    ( [Are some pixels absent] AND [mse_roi is raster size] )? 
-    if ( (isFull & !is.null(mse_roi)) || 
+    # 1. ( [Are all pixels present] AND [is mse_roi provided] ) OR
+    #    ( [Are some pixels absent] AND [mse_roi is raster size] )?
+    if ( (isFull & !is.null(mse_roi)) ||
         (!isFull & (length(mse_roi) == attrs$nX * attrs$nY)) ) {
-        if (!is.logical(mse_roi)) mse_roi <- as.logical(mse_roi) 
+        if (!is.logical(mse_roi)) mse_roi <- as.logical(mse_roi)
 
         # roi cannot be (all TRUE), (all FALSE) or (not raster length)
         if (all(mse_roi) || !any(mse_roi)) {
-            message(.m1) 
-            return( multiSelectROI(mse, mz=mz) ) 
-        } 
+            message(.m1)
+            return( multiSelectROI(mse, mz=mz) )
+        }
 
         if (is.vector(mse_roi)) {
             mse_roi <- matrix(mse_roi, nrow=attrs$nX)
@@ -169,12 +169,12 @@ coregister <- function(mse, opt, mse_roi=NULL, opt_roi=NULL,
 
     # 3. [Are some pixels missing] AND [is mse_roi NA]?
     if (!isFull & is.null(mse_roi)) {
-        sel <- askYesNo(.m32) 
-        if (is.na(sel)) stop("exiting method ... \n") 
+        sel <- askYesNo(.m32)
+        if (is.na(sel)) stop("exiting method ... \n")
 
         if (sel) {
-            if (verbose) message(.m33) 
-            
+            if (verbose) message(.m33)
+
             return( constructROIFromMSIImage(mse, attrs=attrs) )
         }
     }
@@ -182,7 +182,7 @@ coregister <- function(mse, opt, mse_roi=NULL, opt_roi=NULL,
     # 4. [Are some pixels missing] AND [is mse_roi not NA]?
     if (!isFull & !is.null(mse_roi)) {
         if (length(mse_roi) == attrs$nP) { # need to rasterize
-            return( rasterizeROIFromCardinal(mse, mse_roi) ) 
+            return( rasterizeROIFromCardinal(mse, mse_roi) )
         } else if (length(mse_roi) != attrs$nX * attrs$nY) {
             message(.m1)
             return( multiSelectROI(mse, mz=mz) )
@@ -190,42 +190,42 @@ coregister <- function(mse, opt, mse_roi=NULL, opt_roi=NULL,
     }
 
     mse_roi
-} 
-
-
-# `.validOPTROI()` validates the OPT ROI and rasterizes, if needed. If 
-# ROI is not passed, it builds a ROI matrix from OPT image automatically 
-# or have the user select ROI. 
-.validOPTROI <- function(opt, opt_roi=NULL, attrs=NULL) { 
-    .m1 <- paste0("Optical ROI is missing. Select ROI using ", 
-        "your mouse and press `Esc` when finished ... \n")
-    .m2 <- paste0("ROI of the optical image is passed ", 
-        "incorrectly (incorrect size). Select ROI using your ", 
-        "mouse and press `Esc` when finished ... \n") 
-
-    if (is.null(opt_roi)) { 
-        message(.m1)
-        return( multiDrawROI(opt) ) 
-    } 
-
-    if (!is.logical(opt_roi)) opt_roi <- as.logical(opt_roi) 
-
-    # roi cannot be (all TRUE), (all FALSE) or (not raster length)
-    if ( all(opt_roi) || !any(opt_roi) || 
-        (length(opt_roi) != (attrs$nXo * attrs$nYo)) ) {
-        message(.m2) 
-        return( multiDrawROI(opt) ) 
-    } 
-
-    if (is.vector(opt_roi)) opt_roi <- matrix(opt_roi, nrow=attrs$nXo) 
-    
-    opt_roi 
 }
 
 
-# `.SSC()` filters features of the MSI image before dimensionality 
-# reduction. It runs three SSC models from `Cardinal` with three 
-# sweeping radii. It then retrieves the top features from each model. 
+# `.validOPTROI()` validates the OPT ROI and rasterizes, if needed. If
+# ROI is not passed, it builds a ROI matrix from OPT image automatically
+# or have the user select ROI.
+.validOPTROI <- function(opt, opt_roi=NULL, attrs=NULL) {
+    .m1 <- paste0("Optical ROI is missing. Select ROI using ",
+        "your mouse and press `Esc` when finished ... \n")
+    .m2 <- paste0("ROI of the optical image is passed ",
+        "incorrectly (incorrect size). Select ROI using your ",
+        "mouse and press `Esc` when finished ... \n")
+
+    if (is.null(opt_roi)) {
+        message(.m1)
+        return( multiDrawROI(opt) )
+    }
+
+    if (!is.logical(opt_roi)) opt_roi <- as.logical(opt_roi)
+
+    # roi cannot be (all TRUE), (all FALSE) or (not raster length)
+    if ( all(opt_roi) || !any(opt_roi) ||
+        (length(opt_roi) != (attrs$nXo * attrs$nYo)) ) {
+        message(.m2)
+        return( multiDrawROI(opt) )
+    }
+
+    if (is.vector(opt_roi)) opt_roi <- matrix(opt_roi, nrow=attrs$nXo)
+
+    opt_roi
+}
+
+
+# `.SSC()` filters features of the MSI image before dimensionality
+# reduction. It runs three SSC models from `Cardinal` with three
+# sweeping radii. It then retrieves the top features from each model.
 .SSC <- function(mse, BPPARAM=SerialParam()) {
     old <- .Random.seed
     on.exit({ .Random.seed <<- old })
@@ -270,12 +270,12 @@ coregister <- function(mse, opt, mse_roi=NULL, opt_roi=NULL,
 
 prepareDataForCoreg <- function(msimg, opt, mse_roi=NULL, opt_roi=NULL,
                                 spatial_scale=1) {
-    out <- list() 
-    out$MSIMG <- msimg 
+    out <- list()
+    out$MSIMG <- msimg
     out$OPT <- opt
-    
+
     out$mse_roi <- mse_roi
-    out$opt_roi <- opt_roi 
+    out$opt_roi <- opt_roi
 
     DIM <- dim(msimg)[1:2] * spatial_scale
     opt <- applyROIOnImage(opt, opt_roi)
