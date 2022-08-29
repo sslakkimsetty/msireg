@@ -1,4 +1,4 @@
-
+#' @importFrom stats quantile rnorm
 
 normalizeImage <- function(img, separate=TRUE, ft=c(0,1),
                            contrast.enhance=c("none", "suppression", "histogram"),
