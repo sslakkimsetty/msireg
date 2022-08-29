@@ -2,7 +2,7 @@
 #' Co-registers MS imaging data with microscopic optical images
 #'
 #' `coregister()` processes and summarizes MS imaging data and optical images
-#' to make it feasible to apply `SimpleITK`'s family of registration methods.
+#' to and registers them using `SimpleITK`'s family of registration methods.
 #' This method uses spatial shrunken centroids method from `Cardinal` to
 #' filtering out unimportant features.
 #'
@@ -33,73 +33,61 @@
 #'     Registration object from SimpleITK
 #'     Composite transform of the registration
 #'
-#' @import SimpleITK
 #' @import Cardinal
 #' @import EBImage
 #' @import Rtsne
-#' @import BiocParallel
+#' @import BiocParallel 
+#' @import SimpleITK
 #' @export
 #'
-
 coregister <- function(mse, opt, mse_roi=NULL, opt_roi=NULL,
                        SSC=TRUE, mz_list=NULL, spatial_scale=1,
                        BPPARAM=SerialParam(), verbose=FALSE, ...) {
     dots <- list(...)
-    mse <- Cardinal::process(mse) # <- process pending operations, if any
-    mse_attrs <- list(
+    mse <- process(mse) # process pending operations, if any
+    attrs <- list(
         nX = dims(mse)[1], nY = dims(mse)[2],
         nF = dim(mse)[1], nP = dim(mse)[2],
         nXo = dim(opt)[1], nYo = dim(opt)[2]
-    )
-    isFull <- (mse_attrs$nX * mse_attrs$nY) == (mse_attrs$nP)
+    ) 
+    attrs$isFull <- ( (attrs$nX * attrs$nY) == (attrs$nP) )
 
-    ##### Sanity checks #####
-    # 1. [Are all pixels present] AND [is mse_roi NA]? <- yes = bad
-    if (isFull & is.null(mse_roi)) {
-        message("Co-registration performs better on images with their backgrounds removed ...")
-        message("Select the tissue outline using Cardinal::SelectROI() \n")
-        # [!TODO] Need a better way to gather mse_roi: what if mz()[1] is
-        # a bad ion image? What if the code is not run from RStudio?
-        mse_roi <- selectROI(mse, mz=mz(mse)[1])
-        mse_roi <- rasterizeROIFromCardinal(mse, mse_roi)
-    }
+    ########## ROI stuff ##########
 
-    # 2. [Are some pixels missing] AND [is mse_roi NA]?
-    if (!isFull & is.null(mse_roi)) {
-        message("Co-registration performs better on images with their backgrounds removed ...")
-        message("Inferring tissue to be the pixels present ... \n")
-        mse_roi <- constructROIFromMSIImage(mse, attrs=mse_attrs)
-    }
+    # Creates or (checks and modifies) MSI ROI to be in raster format
+    mse_roi <- .validMSIROI(mse, mse_roi, attrs, mz=mz(mse)[1]) 
 
-    # 3. [Are some pixels missing] AND [is mse_roi not NA]?
-    if (!isFull & !is.null(mse_roi)) {
-        if (length(mse_roi) == mse_attrs$nP) { # need to rasterize
-            mse_roi <- rasterizeROIFromCardinal(mse, mse_roi)
-        } else if (length(mse_roi) != mse_attrs$nX * mse_attrs$nY) {
-            message("mse_roi parameter is not passed properly (incorrect size)")
-            message("Select the tissue outline using Cardinal::SelectROI()")
-            mse_roi <- Cardinal::selectROI(mse, mz=mz(mse)[1])
-            mse_roi <- rasterizeROIFromCardinal(mse, mse_roi)
-            # [!TODO] Need a better way to gather mse_roi: what if mz()[1] is
-            # a bad ion image? What if the code is not run from RStudio?
-        }
-    }
-    ##### Sanity checks complete #####
+    # Creates or (checks and modifies) OPT ROI to be in raster format
+    opt_roi <- .validOPTROI(opt, opt_roi, attrs)
 
-    # Filter features
+    return(0)
+
+    ########## Filtering features ##########
+
+    # Filter features 
+    mz_list <- unique(mz_list) 
+
     if (!is.null(mz_list)) {
         if (length(mz_list) < 3) {
             stop("length of mz_list has to be 3 at least \n")
-        } else {
+        } else { 
+            if (verbose) {
+                message("selecting features from m/z list ... \n") 
+                message("skipping SSC ... \n")
+            }
             fid <- sort(features(mse, mz=mz_list))
         }
     } else {
-        # Perform SSC
-        message("filtering features ... ")
+        # Perform SSC 
+        if (verbose) message("filtering features ... \n") 
+
         message("performing spatial shrunken centroids ... \n")
-        topf <- .SSC(mse, BPPARAM)$topf
+        topf <- .SSC(mse, BPPARAM=BPPARAM)$topf
         fid <- features(mse, mz=topf)
-    }
+    } 
+
+
+    ########## Dimensionality reduction ##########
 
     mse_sub <- mse[fid, ]
     ints <- intensityMatrix2D(mse_sub) # nrows = nX * nY; byrow=TRUE
@@ -107,36 +95,137 @@ coregister <- function(mse, opt, mse_roi=NULL, opt_roi=NULL,
 
     # Construct 3-channeled MSI image
     if (length(mz(mse_sub)) == 3) {
-        msimg <- array(ints, dim=c(mse_attrs$nY, mse_attrs$nX, 3))
+        msimg <- array(ints, dim=c(attrs$nY, attrs$nX, 3))
         msimg <- Image(aperm(msimg, perm=c(2,1,3)), colormode=Color)
     } else {
-        # t-SNE representation
-        message("performing tsne ... \n")
-        msimg <- .Rtsne(ints[t(mse_roi), ], tissue=mse_roi,
-                        attrs=mse_attrs)
+        # t-SNE representation 
+        if (verbose) message("performing tsne ... \n")
+        msimg <- .Rtsne(ints[t(mse_roi), ], roi=mse_roi, 
+            attrs=attrs)
     }
 
-    # Optical image stuff
-    if (is.null(opt_roi)) {
-        opt_roi <- drawROIOnImage(opt)
-    }
+
+    ########## Registration ##########
 
     # Process and put the necessary data into a list
-    out <- prepareDataForCoreg(msimg, opt, mse_roi=mse_roi, opt_roi=opt_roi,
-                               spatial_scale=spatial_scale)
+    out <- prepareDataForCoreg(msimg, opt, mse_roi=mse_roi, 
+        opt_roi=opt_roi, spatial_scale=spatial_scale)
 
     # Registration
     type <- c(dots$type, "ffd")[1]
     optim <- c(dots$optim, "gradientDescent")[1]
     metric <- c(dots$metric, "mattesMI")[1]
-    interpolator <- c(dots$interpolator, "linear")[1]
+    interpolator <- c(dots$interpolator, "linear")[1] 
+
     out$reg <- .coregister(out$fixed, out$moving, type=type,
                            optim=optim, metric=metric,
                            interpolator=interpolator)
+    
     out
 }
 
 
+# `.validMSIROI()` validates the MSI ROI and rasterizes if needed. If 
+# ROI is not passed, it builds a ROI matrix from MSI image automatically 
+# or have the user select ROI. 
+.validMSIROI <- function(mse, mse_roi=NULL, mz=NULL, attrs=NULL) { 
+    .m1 <- paste0("ROI of the MSI image is passed ", 
+        "incorrectly (incorrect size). Select ROI using your ", 
+        "mouse and press `Esc` when finished ... \n") 
+    .m2 <- paste0("Co-registration performs better on images ", 
+        "with their backgrounds removed ... \n", 
+        "Select ROI using your mouse and press ", 
+        "`Esc` when finished ... \n") 
+    .m31 <- paste0("Co-registration performs better on images ", 
+        "with their backgrounds removed ... \n") 
+    .m32 <- paste0("Do you want to automatically select ROI to ", 
+            "be the pixels present?")
+    .m33 <- paste0("Inferring tissue to be the pixels present ... \n") 
+
+    isFull <- attrs$isFull 
+
+    # 1. ( [Are all pixels present] AND [is mse_roi provided] ) OR 
+    #    ( [Are some pixels absent] AND [mse_roi is raster size] )? 
+    if ( (isFull & !is.null(mse_roi)) || 
+        (!isFull & (length(mse_roi) == attrs$nX * attrs$nY)) ) {
+        if (!is.logical(mse_roi)) mse_roi <- as.logical(mse_roi) 
+
+        # roi cannot be (all TRUE), (all FALSE) or (not raster length)
+        if (all(mse_roi) || !any(mse_roi)) {
+            message(.m1) 
+            return( multiSelectROI(mse, mz=mz) ) 
+        } 
+
+        if (is.vector(mse_roi)) {
+            mse_roi <- matrix(mse_roi, nrow=attrs$nX)
+        }
+    }
+
+    # 2. [Are all pixels present] AND [is mse_roi NA]? <- yes = bad
+    if (isFull & is.null(mse_roi)) {
+        message(.m2)
+        return( multiSelectROI(mse, mz=mz) )
+    }
+
+    # 3. [Are some pixels missing] AND [is mse_roi NA]?
+    if (!isFull & is.null(mse_roi)) {
+        sel <- askYesNo(.m32) 
+        if (is.na(sel)) stop("exiting method ... \n") 
+
+        if (sel) {
+            if (verbose) message(.m33) 
+            
+            return( constructROIFromMSIImage(mse, attrs=attrs) )
+        }
+    }
+
+    # 4. [Are some pixels missing] AND [is mse_roi not NA]?
+    if (!isFull & !is.null(mse_roi)) {
+        if (length(mse_roi) == attrs$nP) { # need to rasterize
+            return( rasterizeROIFromCardinal(mse, mse_roi) ) 
+        } else if (length(mse_roi) != attrs$nX * attrs$nY) {
+            message(.m1)
+            return( multiSelectROI(mse, mz=mz) )
+        }
+    }
+
+    mse_roi
+} 
+
+
+# `.validOPTROI()` validates the OPT ROI and rasterizes, if needed. If 
+# ROI is not passed, it builds a ROI matrix from OPT image automatically 
+# or have the user select ROI. 
+.validOPTROI <- function(opt, opt_roi=NULL, attrs=NULL) { 
+    .m1 <- paste0("Optical ROI is missing. Select ROI using ", 
+        "your mouse and press `Esc` when finished ... \n")
+    .m2 <- paste0("ROI of the optical image is passed ", 
+        "incorrectly (incorrect size). Select ROI using your ", 
+        "mouse and press `Esc` when finished ... \n") 
+
+    if (is.null(opt_roi)) { 
+        message(.m1)
+        return( multiDrawROI(opt) ) 
+    } 
+
+    if (!is.logical(opt_roi)) opt_roi <- as.logical(opt_roi) 
+
+    # roi cannot be (all TRUE), (all FALSE) or (not raster length)
+    if ( all(opt_roi) || !any(opt_roi) || 
+        (length(opt_roi) != (attrs$nXo * attrs$nYo)) ) {
+        message(.m2) 
+        return( multiDrawROI(opt) ) 
+    } 
+
+    if (is.vector(opt_roi)) opt_roi <- matrix(opt_roi, nrow=attrs$nXo) 
+    
+    opt_roi 
+}
+
+
+# `.SSC()` filters features of the MSI image before dimensionality 
+# reduction. It runs three SSC models from `Cardinal` with three 
+# sweeping radii. It then retrieves the top features from each model. 
 .SSC <- function(mse, BPPARAM=SerialParam()) {
     old <- .Random.seed
     on.exit({ .Random.seed <<- old })
@@ -157,18 +246,7 @@ coregister <- function(mse, opt, mse_roi=NULL, opt_roi=NULL,
 }
 
 
-intensityMatrix2D <- function(mse, byrow=TRUE) {
-    nF <- dim(mse)[1]
-
-    if (byrow) out <- matrix(aperm(slice(mse), c(2,1,3)), ncol=nF)
-    else out <- matrix(slice(mse), ncol=nF)
-
-    out[is.na(out)] <- 0
-    out
-}
-
-
-.Rtsne <- function(ints, tissue=NA, attrs=NA, verbose=TRUE) {
+.Rtsne <- function(ints, roi=NA, attrs=NA, verbose=TRUE) {
     # Set params for t-SNE method
     theta <- 0.1
     initial_dims <- 30
@@ -186,15 +264,18 @@ intensityMatrix2D <- function(mse, byrow=TRUE) {
     out <- Rtsne(ints, dims=3, theta=theta, pca=pca, initial_dims=initial_dims,
                  partial_pca=partial_pca, verbose=verbose, max_iter=500, # TEMP change max_iter=max_iter
                  check_duplicates=FALSE, num_threads=0)
-    tsneToImage(out, tissue=tissue, attrs=attrs)
+    convertToImage(out, roi=roi, attrs=attrs)
 }
 
 
 prepareDataForCoreg <- function(msimg, opt, mse_roi=NULL, opt_roi=NULL,
                                 spatial_scale=1) {
-    out <- list()
+    out <- list() 
+    out$MSIMG <- msimg 
     out$OPT <- opt
-    out$MSIMG <- msimg
+    
+    out$mse_roi <- mse_roi
+    out$opt_roi <- opt_roi 
 
     DIM <- dim(msimg)[1:2] * spatial_scale
     opt <- applyROIOnImage(opt, opt_roi)
