@@ -76,7 +76,8 @@ PadImageToMatchDims <- function(img, target_dim=c(200,200)) {
         	c((padding[3]+1):(padding[3]+h0))] <- imageData(img)
     }
 
-    Image(out, colormode=Color)
+    cm <- if (length(dim(out)) > 2) Color else Grayscale
+    Image(out, colormode=cm)
 }
 
 
@@ -95,7 +96,7 @@ PadImageToMatchDims <- function(img, target_dim=c(200,200)) {
 padImageWithPercentage <- function(img, pad=c(0.1, 0.1, 0.1, 0.1)) {
     pad[c(1,3)] <- pad[c(1,3)] * dim(img)[2]
     pad[c(2,4)] <- pad[c(2,4)] * dim(img)[1]
-    .applyPaddingToImage(img, paddding=pad)
+    .applyPaddingToImage(img, padding=pad)
 }
 
 

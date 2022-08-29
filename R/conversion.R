@@ -17,7 +17,7 @@ intensityMatrix2D <- function(mse, byrow=FALSE) {
     if (!byrow) out <- matrix(slice(mse), ncol=nF) # column major
     else out <- matrix(aperm(slice(mse), c(2,1,3)), ncol=nF)
 
-    out[is.na(out)] <- 0 # slice() returns NAs for unavailable pixels
+    out[is.na(out)] <- 0 # slice() returns NAs for missing pixels
     out
 }
 
