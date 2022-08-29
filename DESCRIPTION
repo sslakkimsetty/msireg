@@ -15,11 +15,11 @@ Imports:
     Cardinal,
     EBImage,
     graphics,
-    Rtsne,
-    SimpleITK,
+    Rtsne, 
+    SimpleITK, 
     sp
 Suggests: 
-    testthat (>= 3.0.0) 
+    testthat (>= 3.0.0),
     knitr
 Remotes: 
     github::SimpleITK/SimpleITKRInstaller
