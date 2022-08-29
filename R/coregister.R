@@ -84,11 +84,10 @@ coregister <- function(mse, opt, mse_roi=NULL, opt_roi=NULL,
         fid <- features(mse, mz=topf)
     }
 
-
     ########## Dimensionality reduction ##########
 
     mse_sub <- mse[fid, ]
-    ints <- intensityMatrix2D(mse_sub) # nrows = nX * nY; byrow=TRUE
+    ints <- intensityMatrix2D(mse_sub)
     ints <- normalizeImage(ints)
 
     # Construct 3-channeled MSI image
@@ -98,8 +97,7 @@ coregister <- function(mse, opt, mse_roi=NULL, opt_roi=NULL,
     } else {
         # t-SNE representation
         if (verbose) message("performing tsne ... \n")
-        msimg <- .Rtsne(ints[t(mse_roi), ], roi=mse_roi,
-            attrs=attrs)
+        msimg <- .Rtsne(ints[mse_roi, ], roi=mse_roi, attrs=attrs)
     }
 
 
@@ -170,13 +168,16 @@ coregister <- function(mse, opt, mse_roi=NULL, opt_roi=NULL,
     # 3. [Are some pixels missing] AND [is mse_roi NA]?
     if (!isFull & is.null(mse_roi)) {
         sel <- askYesNo(.m32)
-        if (is.na(sel)) stop("exiting method ... \n")
-
-        if (sel) {
+        if (is.na(sel)) {
+            stop("exiting method ... \n") 
+        } else if (sel) {
             if (verbose) message(.m33)
-
             return( constructROIFromMSIImage(mse, attrs=attrs) )
+        } else {
+            if (verbose) message(.m2) 
+            return( multiSelectROI(mse, mz=mz) )
         }
+
     }
 
     # 4. [Are some pixels missing] AND [is mse_roi not NA]?
