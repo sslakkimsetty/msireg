@@ -169,12 +169,12 @@ coregister <- function(mse, opt, mse_roi=NULL, opt_roi=NULL,
     if (!isFull & is.null(mse_roi)) {
         sel <- askYesNo(.m32)
         if (is.na(sel)) {
-            stop("exiting method ... \n") 
+            stop("exiting method ... \n")
         } else if (sel) {
             if (verbose) message(.m33)
             return( constructROIFromMSIImage(mse, attrs=attrs) )
         } else {
-            if (verbose) message(.m2) 
+            if (verbose) message(.m2)
             return( multiSelectROI(mse, mz=mz) )
         }
 
@@ -253,7 +253,7 @@ coregister <- function(mse, opt, mse_roi=NULL, opt_roi=NULL,
     initial_dims <- 30
     partial_pca <- FALSE
     pca <- FALSE
-    max_iter <- 400
+    max_iter <- 500
 
     if (ncol(ints) > 1000) {
         partial_pca <- TRUE
@@ -263,7 +263,7 @@ coregister <- function(mse, opt, mse_roi=NULL, opt_roi=NULL,
     else if (ncol(ints) <= 30) theta <- 0.1 # TEMP change theta=0.05
 
     out <- Rtsne(ints, dims=3, theta=theta, pca=pca, initial_dims=initial_dims,
-                 partial_pca=partial_pca, verbose=verbose, max_iter=500, # TEMP change max_iter=max_iter
+                 partial_pca=partial_pca, verbose=verbose, max_iter=max_iter,
                  check_duplicates=FALSE, num_threads=0)
     convertToImage(out, roi=roi, attrs=attrs)
 }
