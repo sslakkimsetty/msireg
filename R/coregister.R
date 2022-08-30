@@ -199,7 +199,7 @@ coregister <- function(mse, opt, mse_roi=NULL, opt_roi=NULL,
 # `.validOPTROI()` validates the OPT ROI and rasterizes, if needed. If
 # ROI is not passed, it builds a ROI matrix from OPT image automatically
 # or have the user select ROI.
-.validOPTROI <- function(opt, opt_roi=NULL, attrs=NULL) { 
+.validOPTROI <- function(opt, opt_roi=NULL, attrs=NULL) {
     message("processing OPT ROI ... \n")
 
     .m1 <- paste0("Optical ROI is missing. Select ROI using ",
