@@ -159,8 +159,11 @@ rasterizeROIFromCardinal <- function(mse, roi, byrow=FALSE) {
 #     is inferred to be the existing pixels in the MSI data.
 
 constructROIFromMSIImage <- function(mse, attrs=NULL) {
+    coords <- as.matrix(coord(mse)[, 1:2])
+
     roi <- matrix(rep(FALSE, attrs$nX * attrs$nY), ncol=attrs$nY)
-    roi[as.matrix(coord(mse))] <- TRUE
+    roi[coords] <- TRUE
+    
     roi
 }
 
