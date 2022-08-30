@@ -163,7 +163,7 @@ constructROIFromMSIImage <- function(mse, attrs=NULL) {
 
     roi <- matrix(rep(FALSE, attrs$nX * attrs$nY), ncol=attrs$nY)
     roi[coords] <- TRUE
-    
+
     roi
 }
 
