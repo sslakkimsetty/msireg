@@ -127,6 +127,8 @@ coregister <- function(mse, opt, mse_roi=NULL, opt_roi=NULL,
 
 #' @importFrom utils askYesNo
 .validMSIROI <- function(mse, mse_roi=NULL, mz=NULL, attrs=NULL, verbose=FALSE) {
+    message("processing MSI ROI ... \n")
+
     .m1 <- paste0("ROI of the MSI image is passed ",
         "incorrectly (incorrect size). Select ROI using your ",
         "mouse and press `Esc` when finished ... \n")
@@ -197,7 +199,9 @@ coregister <- function(mse, opt, mse_roi=NULL, opt_roi=NULL,
 # `.validOPTROI()` validates the OPT ROI and rasterizes, if needed. If
 # ROI is not passed, it builds a ROI matrix from OPT image automatically
 # or have the user select ROI.
-.validOPTROI <- function(opt, opt_roi=NULL, attrs=NULL) {
+.validOPTROI <- function(opt, opt_roi=NULL, attrs=NULL) { 
+    message("processing OPT ROI ... \n")
+
     .m1 <- paste0("Optical ROI is missing. Select ROI using ",
         "your mouse and press `Esc` when finished ... \n")
     .m2 <- paste0("ROI of the optical image is passed ",
