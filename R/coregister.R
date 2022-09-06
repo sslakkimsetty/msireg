@@ -127,7 +127,7 @@ coregister <- function(mse, opt, mse_roi=NULL, opt_roi=NULL,
 
 #' @importFrom utils askYesNo
 .validMSIROI <- function(mse, mse_roi=NULL, mz=NULL, attrs=NULL, verbose=FALSE) {
-    message("processing MSI ROI ... \n")
+    message("\nprocessing MSI ROI ... \n")
 
     .m1 <- paste0("ROI of the MSI image is passed ",
         "incorrectly (incorrect size). Select ROI using your ",
@@ -251,7 +251,7 @@ coregister <- function(mse, opt, mse_roi=NULL, opt_roi=NULL,
 }
 
 
-.Rtsne <- function(ints, roi=NA, attrs=NA, verbose=TRUE) {
+.Rtsne <- function(ints, roi=NA, attrs=NA, verbose=FALSE) {
     # Set params for t-SNE method
     theta <- 0.1
     initial_dims <- 30
@@ -289,6 +289,7 @@ prepareDataForCoreg <- function(msimg, opt, mse_roi=NULL, opt_roi=NULL,
 
     msimg <- applyROIOnImage(msimg, mse_roi)
     msimg <- normalizeImage(msimg, contrast.enhance="histogram")
+    msimg <- applyROIOnImage(msimg, mse_roi)
     msimg <- resizeAndPadImageToMatchDims(msimg, DIM)
 
     opt <- channel(opt, "luminance")
