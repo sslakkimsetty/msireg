@@ -40,29 +40,79 @@ normalizedCrossCorr <- function(img1, img2) {
 }
 
 
-displacementFieldJacobian <- function(tf, dim=NULL, ref_img=NULL) {
+jacobianDeterminantFromTransform <- function(tf, dim=NULL, ref_img=NULL,
+                                             simpleITK_for_det=TRUE) {
     out <- list()
-    tfd <- TransformToDisplacementFieldFilter()
+    displ_field_filter <- TransformToDisplacementFieldFilter()
 
     if (!is.null(dim)) {
-        tfd$SetSize(dim)
+        displ_field_filter$SetSize(dim)
     } else if(!is.null(ref_img)) {
-        tfd$SetReferenceImage(ref_img)
+        displ_field_filter$SetReferenceImage(ref_img)
     } else {
-        stop("dim and ref_img are both null, provide at least one of 
-            them.", call.=FALSE)
+        stop("dim and ref_img are both null, provide at least one of them.",
+             call.=FALSE)
     }
 
-    displ <- tfd$Execute(tf)
-    out$DISPL <- as.array(displ)
+    displ_field <- displ_field_filter$Execute(tf)
+    out$displ_field <- as.array(displ_field)
 
-    jacdet <- DisplacementFieldJacobianDeterminantFilter()
-    det <- jacdet$Execute(displ)
-    out$DET <- as.array(det)
+    if (simpleITK_for_det) {
+        jacdet_filter <- DisplacementFieldJacobianDeterminantFilter()
+        jac_det <- jacdet_filter$Execute(displ_field)
+        out$jacobian_det <- as.array(jac_det)
+    } else {
+        out$jacobian_det <-
+            displacementFieldJacobianDeterminant(as.array(displ_field))
+    }
 
     out
 }
 
 
+displacementFieldJacobianDeterminant <- function(displ_field=NULL) {
+    d <- dim(displ_field)
+    displ_field <- aperm(displ_field, c(2,1,3))
 
+    # gradient_field a.k.a. jacobian
+    gradient_field <- array(0, dim=c(d[2:1],4))
+    gradient_field[, , c(1,3)] <- matrixGradients(displ_field[, , 1])
+    gradient_field[, , c(2,4)] <- matrixGradients(displ_field[, , 2])
+
+    gradientFieldDeterminant(gradient_field)
+}
+
+
+# can be images or displacement fields
+# [, , 1] -> gradients in x-direction
+# [, , 2] -> gradients in y-direction
+matrixGradients <- function(mat) {
+    filter_horz <- matrix(c(
+        0, 0, 0,
+        1/2, 0, -1/2,
+        0, 0, 0
+    ), ncol=3, byrow=TRUE)
+    filter_vert <- t(filter_horz)
+
+    d <- dim(mat)
+    gradient_field <- array(0, dim=c(d[2:1],2))
+    gradient_field[, , 1] <- filter2(mat, fh, boundary="replicate")
+    gradient_field[, , 2] <- filter2(mat, fv, boundary="replicate")
+
+    gradient_field
+}
+
+
+gradientFieldDeterminant <- function(gradient_field=NULL) {
+    d <- dim(gradient_field)[2:1]
+    gradient_field_det <- matrix(0, nrow=d[1], ncol=d[2])
+    . <- sapply(0:(prod(d[1:2])-1), function(x){
+        .x <- x %/% d[2] + 1
+        .y <- x %% d[2] + 1
+        .jac <- gradient_field[.y, .x, ] + c(1, 0, 0, 1)
+        gradient_field_det[.x, .y] <<- det(matrix(.jac, nrow=2, byrow=TRUE))
+    })
+
+    gradient_field_det
+}
 
