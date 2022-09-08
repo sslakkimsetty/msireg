@@ -51,7 +51,7 @@ PadImageToMatchDims <- function(img, target_dim=c(200,200)) {
 }
 
 
-# Applies padding to image
+# Applies padding to image (in pixels)
 .applyPaddingToImage <- function(img, padding=c(0,0,0,0)) {
     w0 <- dim(img)[1]
     h0 <- dim(img)[2]
