@@ -104,15 +104,10 @@ matrixGradients <- function(mat) {
 
 
 gradientFieldDeterminant <- function(gradient_field=NULL) {
-    d <- dim(gradient_field)[2:1]
-    gradient_field_det <- matrix(0, nrow=d[1], ncol=d[2])
-    . <- sapply(0:(prod(d[1:2])-1), function(x){
-        .x <- x %/% d[2] + 1
-        .y <- x %% d[2] + 1
-        .jac <- gradient_field[.y, .x, ] + c(1, 0, 0, 1)
-        gradient_field_det[.x, .y] <<- det(matrix(.jac, nrow=2, byrow=TRUE))
-    })
+    gradient_field[, , c(1,4)] <- gradient_field[, , c(1,4)] + 1
+    gradient_field <- aperm(gradient_field, c(2,1,3))
 
-    gradient_field_det
+    apply(gradient_field, MARGIN=c(1,2),
+          function(x) { det(matrix(x, nrow=2)) })
 }
 
