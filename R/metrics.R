@@ -21,7 +21,7 @@ resizeMask <- function(ref, target) {
 }
 
 
-transformMask <- function(mask, tf) {
+applyTransformOnMask <- function(mask, tf) {
     mask <- SimpleITK::as.image(mask, isVector=FALSE)
     mask <- Resample(mask, tf)
 
