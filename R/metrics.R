@@ -76,8 +76,8 @@ displacementFieldJacobianDeterminant <- function(displ_field=NULL) {
 
     # gradient_field a.k.a. jacobian
     gradient_field <- array(0, dim=c(d[2:1],4))
-    gradient_field[, , c(1,3)] <- matrixGradients(displ_field[, , 1])
-    gradient_field[, , c(2,4)] <- matrixGradients(displ_field[, , 2])
+    gradient_field[, , c(1,3)] <- matrixGradients(displ_field[, , 1], TRUE)
+    gradient_field[, , c(2,4)] <- matrixGradients(displ_field[, , 2], TRUE)
 
     gradientFieldDeterminant(gradient_field)
 }
@@ -86,7 +86,7 @@ displacementFieldJacobianDeterminant <- function(displ_field=NULL) {
 # can be images or displacement fields
 # [, , 1] -> gradients in x-direction
 # [, , 2] -> gradients in y-direction
-matrixGradients <- function(mat) {
+matrixGradients <- function(mat, determinant=FALSE) {
     filter_horz <- matrix(c(
         0, 0, 0,
         1/2, 0, -1/2,
@@ -94,10 +94,10 @@ matrixGradients <- function(mat) {
     ), ncol=3, byrow=TRUE)
     filter_vert <- t(filter_horz)
 
-    d <- dim(mat)
+    d <- if (!determinant) dim(mat)[2:1] else dim(mat)
     gradient_field <- array(0, dim=c(d[2:1],2))
-    gradient_field[, , 1] <- filter2(mat, fh, boundary="replicate")
-    gradient_field[, , 2] <- filter2(mat, fv, boundary="replicate")
+    gradient_field[, , 1] <- filter2(mat, filter_horz, boundary="replicate")
+    gradient_field[, , 2] <- filter2(mat, filter_vert, boundary="replicate")
 
     gradient_field
 }
