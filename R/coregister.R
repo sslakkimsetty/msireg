@@ -97,7 +97,8 @@ coregister <- function(mse, opt, mse_roi=NULL, opt_roi=NULL,
     } else {
         # t-SNE representation
         if (verbose) message("performing tsne ... \n")
-        msimg <- .Rtsne(ints[mse_roi, ], roi=mse_roi, attrs=attrs)
+        msimg <- .Rtsne(ints[mse_roi, ], roi=mse_roi, attrs=attrs,
+                        verbose=verbose)
     }
 
 
