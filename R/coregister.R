@@ -19,6 +19,8 @@
 #'     reduction.
 #' @param spatial_scale Factor with respect to MS image's spatial dimensions
 #'     (default = 1); co-registration will be performed at this scale.
+#' @param register_with_gradients Perform registration with gradients of
+#'     intensities rather than intensities themselves (default=FALSE)
 #' @param BPPARAM `BiocParallelParam` specification (default = `SerialParam()`);
 #'     See documentation for `bplapply`.
 #' @param verbose A logical flag (default=FALSE); whether updates shoule be
@@ -42,6 +44,7 @@
 #'
 coregister <- function(mse, opt, mse_roi=NULL, opt_roi=NULL,
                        SSC=TRUE, mz_list=NULL, spatial_scale=1,
+                       register_with_gradients=FALSE,
                        BPPARAM=SerialParam(), verbose=FALSE, ...) {
     dots <- list(...)
     mse <- process(mse) # process pending operations, if any
@@ -87,8 +90,13 @@ coregister <- function(mse, opt, mse_roi=NULL, opt_roi=NULL,
     ########## Dimensionality reduction ##########
 
     mse_sub <- mse[fid, ]
-    ints <- intensityMatrix2D(mse_sub)
-    ints <- normalizeImage(ints)
+
+    if (!register_with_gradients) {
+        ints <- intensityMatrix2D(mse_sub)
+        ints <- normalizeImage(ints)
+    } else {
+        ints <- gradientsOfMSIntensities(mse_sub)
+    }
 
     # Construct 3-channeled MSI image
     if (length(mz(mse_sub)) == 3) {

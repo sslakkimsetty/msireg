@@ -55,3 +55,31 @@ contrast.enhance.suppression <- function(x, suppression=c(0, 1),
 }
 
 
+normalizeGradients <- function(gradients) {
+    # grad = grad / | grad |
+    ## | grad | = sqrt(gradx^2 + grady^2)
+
+    DBL_EPSILON <- 1e-7 # any numeric value less than this is considered 0
+    gradients[gradients < DBL_EPSILON] <- 0
+
+    channels <- TRUE
+    D <- dim(gradients)
+    if (length(D) == 3) { # if number of channels is just 1
+        gradients <- array(gradients, dim=c(D, 1))
+        D <- c(D, 1)
+        channels <- FALSE
+    }
+
+    gradients <- apply(gradients, c(4), function(x) {
+        denom <- sqrt( (x[, , 1] ^ 2) + (x[, , 2] ^ 2) )
+        x / array(rep(denom, 2), dim=c(dim(denom), 2))
+    })
+
+    gradients[is.nan(gradients)] <- 0
+
+    if (channels) {
+        array(gradients, dim=D)
+    } else {
+        array(gradients, dim=D[1:3])
+    }
+}

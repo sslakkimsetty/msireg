@@ -22,6 +22,31 @@ intensityMatrix2D <- function(mse, byrow=FALSE) {
 }
 
 
+#
+gradientsOfMSIntensities <- function(mse) {
+    ints <- slice(mse)
+    ints[is.na(ints)] <- 0
+    grads <- apply(ints, c(3), matrixGradients) |>
+        array(dim=c(dim(ints)[1:2],2,dim(ints)[3]))
+    grads[, , 1, ] <- normalizeImage(grads[, , 1, ],
+                                     contrast.enhance="suppression",
+                                     smooth.image="gaussian") |>
+        imageData()
+    grads[, , 2, ] <- normalizeImage(grads[, , 2, ],
+                                     contrast.enhance="suppression",
+                                     smooth.image="gaussian") |>
+        imageData()
+
+    grads <- grads |> apply(MARGIN=c(1,2,4), mean) |>
+        array(dim=dim(ints))
+
+    nF <- dim(mse)[1]
+    grads <- matrix(grads, ncol=nF)
+
+    grads
+}
+
+
 # Convert feature matrices with ROI into rasterized matrices with
 #     features as channels
 #
