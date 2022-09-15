@@ -169,31 +169,48 @@ constructROIFromMSIImage <- function(mse, attrs=NULL) {
 
 
 
-# cropToEdgesAndPadZeros() builds target image and its corresponding 
-#     (spatially matching) target mask to approximately match the 
-#     spatial position the tissue (ROI) on the optical image with that of 
-#     the MSI image. 
-
+#' Approximately match positions of tissues (binary masks) in two images 
+#'
+#' `cropToEdgesAndPadZeros()` builds target image and its corresponding 
+#'     (spatially matching) target mask to approximately match the 
+#'     spatial position the tissue (ROI) on the optical image with that of 
+#'     the MSI image. 
+#'
+#' @param ref_mask A reference binary mask showing position of the tissue 
+#' @param target_mask A binary mask of the tissue to be spatially matched
+#'     to that of `ref_mask` 
+#' @param target_img An optional image (`EBImage::Image`) which, if 
+#'     provided, will be spatially matched to the tissue in `ref_mask` 
+#'
+#' @return Returns a list of two items: `target_mask` and `target_img` in 
+#'     which the tissue positions are now approximately in the same area 
+#'     as that of in `ref_mask`
+#'
+#' @export
+#'
 cropToEdgesAndPadZeros <- function(ref_mask, target_mask, 
     target_img=NULL) {
     # Cast target_img as Image as it's needed down the line
     if (is.matrix(target_img)) {
-        target_img <- Image(target_img, colormode=Grayscale)
+        target_img <- Image(target_img, colormode=Grayscale) 
+        dim_length <- length(dim(target_img))
     } else if (is.array(target_img)) {
-        target_img <- Image(target_img, colormode=Color)
+        target_img <- Image(target_img, colormode=Color) 
+        dim_length <- length(dim(target_img))
     }
 
-    dims <- length(dim(target_img))
     pads <- getPadPercentagesFromMask(ref_mask)
     edges <- findBoundaryEdgesInMask(target_mask)
 
     # Cropping
     target_mask <- target_mask[edges[3]:edges[4], edges[1]:edges[2]]
 
-    if (dims == 2) {
-        target_img <- target_img[edges[3]:edges[4], edges[1]:edges[2]]
-    } else if (dims > 2) {
-        target_img <- target_img[edges[3]:edges[4], edges[1]:edges[2], ]
+    if (!is.null(target_img)) {
+        if (dim_length == 2) {
+            target_img <- target_img[edges[3]:edges[4], edges[1]:edges[2]]
+        } else if (dim_length > 2) {
+            target_img <- target_img[edges[3]:edges[4], edges[1]:edges[2], ]
+        }
     }
 
     # Padding
@@ -202,8 +219,10 @@ cropToEdgesAndPadZeros <- function(ref_mask, target_mask,
     target_mask <- imageData(target_mask)
     target_mask <- matrix(as.logical(target_mask), nrow=nrow(target_mask))
 
-    target_img <- padImageWithPercentage(
-        target_img, pad=c(pads[3], pads[2], pads[1], pads[4]))
+    if (!is.null(target_img)) {
+        target_img <- padImageWithPercentage(
+            target_img, pad=c(pads[3], pads[2], pads[1], pads[4]))
+    }
 
     list(mask=target_mask, img=target_img)
 } 
