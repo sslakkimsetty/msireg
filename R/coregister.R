@@ -301,6 +301,7 @@ prepareDataForCoreg <- function(msimg, opt, mse_roi=NULL, opt_roi=NULL,
     msimg <- applyROIOnImage(msimg, mse_roi)
     msimg <- resizeAndPadImageToMatchDims(msimg, DIM) 
 
+    out$opt_rgb <- opt 
     out$msimg_rgb <- msimg 
 
     opt <- channel(opt, "luminance")
