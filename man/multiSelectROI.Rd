@@ -9,11 +9,11 @@ multiSelectROI(mse, mz, rasterize = TRUE, ...)
 \arguments{
 \item{mse}{The imaging dataset to select ROI}
 
-\item{mz}{An example ion image with mass / charge (mz) to display; passed
-over to \code{Cardinal::image()} function}
+\item{mz}{An example ion image with mass / charge (mz) to display;
+passed over to \code{Cardinal::image()} function}
 
-\item{rasterize}{A logical flag (default = TRUE); whether to rasterize the
-ROI (affects the cases only where MS image is not rectangular).}
+\item{rasterize}{A logical flag (default = TRUE); whether to rasterize
+the ROI (affects the cases only where MS image is not rectangular).}
 
 \item{...}{Passed to \code{Cardinal::selectROI()}}
 }

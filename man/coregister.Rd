@@ -12,6 +12,7 @@ coregister(
   SSC = TRUE,
   mz_list = NULL,
   spatial_scale = 1,
+  register_with_gradients = FALSE,
   BPPARAM = SerialParam(),
   verbose = FALSE,
   ...
@@ -37,6 +38,9 @@ reduction.}
 
 \item{spatial_scale}{Factor with respect to MS image's spatial dimensions
 (default = 1); co-registration will be performed at this scale.}
+
+\item{register_with_gradients}{Perform registration with gradients of
+intensities rather than intensities themselves (default=FALSE)}
 
 \item{BPPARAM}{\code{BiocParallelParam} specification (default = \code{SerialParam()});
 See documentation for \code{bplapply}.}

@@ -2,6 +2,7 @@
 
 export(applyROIOnImage)
 export(coregister)
+export(cropToEdgesAndPadZeros)
 export(drawROIOnImage)
 export(multiDrawROI)
 export(multiSelectROI)

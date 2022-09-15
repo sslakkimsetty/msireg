@@ -10,8 +10,8 @@ multiDrawROI(img)
 \item{img}{An \code{EBImage::Image} object to select ROI on}
 }
 \value{
-Returns the ROI as a logical matrix of the same spatial dimensions
-as \code{img}
+Returns the ROI as a logical matrix of the same spatial
+dimensions as \code{img}
 }
 \description{
 \code{multiDrawROI()} extends \code{drawROIOnImage()} to allow selection of
