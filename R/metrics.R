@@ -111,3 +111,22 @@ gradientFieldDeterminant <- function(gradient_field=NULL) {
           function(x) { det(matrix(x, nrow=2)) })
 }
 
+
+normalizedFieldGradientDistance <- function(img1, img2,
+                                            type=c("cosine", "sine")) {
+    D <- dim(img1) 
+    grads1 <- matrixGradients(img1) |> normalizeGradients()
+    grads2 <- matrixGradients(img2) |> normalizeGradients() 
+
+    grads <- array(c(grads1, grads2), dim=c(D, 4))
+    cos_dist <- apply(.grads, c(1,2), function(x) {
+        if (identical(x[c(1:2)], x[c(3:4)])) return(1)
+
+        (sum( x[c(1:2)] * x[c(3:4)] ))
+    }) |>
+        array(dim=dim(img1)) 
+
+    cos_dist
+}
+
+
