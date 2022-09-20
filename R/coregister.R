@@ -303,7 +303,7 @@ prepareDataForCoreg <- function(msimg, opt, mse_roi=NULL, opt_roi=NULL,
     msimg <- resizeAndPadImageToMatchDims(msimg, DIM) 
     out$msimg_rgb <- msimg 
     msimg <- normalizeImage(msimg, contrast.enhance="histogram")
-    msimg <- applyROIOnImage(msimg, mse_roi) 
+    # msimg <- applyROIOnImage(msimg, mse_roi) 
     
     opt <- channel(opt, "luminance")
     msimg <- channel(msimg, "luminance")
