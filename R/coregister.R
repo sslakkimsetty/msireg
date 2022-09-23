@@ -117,14 +117,14 @@ coregister <- function(mse, opt, mse_roi=NULL, opt_roi=NULL,
         opt_roi=opt_roi, spatial_scale=spatial_scale)
 
     # Registration
-    type <- c(dots$type, "ffd")[1]
-    optim <- c(dots$optim, "gradientDescent")[1]
-    metric <- c(dots$metric, "mattesMI")[1]
-    interpolator <- c(dots$interpolator, "linear")[1]
-
-    out$reg <- .coregister(out$fixed, out$moving, type=type,
-                           optim=optim, metric=metric,
-                           interpolator=interpolator)
+    # type <- c(dots$type, "ffd")[1]
+    # optim <- c(dots$optim, "gradientDescent")[1]
+    # metric <- c(dots$metric, "mattesMI")[1]
+    # interpolator <- c(dots$interpolator, "linear")[1]
+    #
+    # out$reg <- .coregister(out$fixed, out$moving, type=type,
+    #                        optim=optim, metric=metric,
+    #                        interpolator=interpolator)
 
     out
 }
@@ -293,18 +293,21 @@ prepareDataForCoreg <- function(msimg, opt, mse_roi=NULL, opt_roi=NULL,
 
     DIM <- dim(msimg)[1:2] * spatial_scale
     opt <- applyROIOnImage(opt, opt_roi)
-    opt <- resizeAndPadImageToMatchDims(opt[, , 1:3], DIM) 
+    opt <- resizeAndPadImageToMatchDims(opt[, , 1:3], DIM)
 
-    out$opt_rgb <- opt 
+    out$opt_rgb <- opt
     opt <- normalizeImage(opt, contrast.enhance="histogram")
-    
 
-    msimg <- applyROIOnImage(msimg, mse_roi) 
-    msimg <- resizeAndPadImageToMatchDims(msimg, DIM) 
-    out$msimg_rgb <- msimg 
+
+    msimg <- applyROIOnImage(msimg, mse_roi)
+    msimg <- resizeAndPadImageToMatchDims(msimg, DIM)
+    out$msimg_rgb <- msimg
     msimg <- normalizeImage(msimg, contrast.enhance="histogram")
-    # msimg <- applyROIOnImage(msimg, mse_roi) 
-    
+
+    mse_roi <- resizeAndPadImageToMatchDims(Image(mse_roi), DIM)
+    mse_roi <- matrix(as.logical(imageData(mse_roi)), nrow=DIM[1])
+    msimg <- applyROIOnImage(msimg, mse_roi)
+
     opt <- channel(opt, "luminance")
     msimg <- channel(msimg, "luminance")
 
