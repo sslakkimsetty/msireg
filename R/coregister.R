@@ -117,14 +117,14 @@ coregister <- function(mse, opt, mse_roi=NULL, opt_roi=NULL,
         opt_roi=opt_roi, spatial_scale=spatial_scale)
 
     # Registration
-    # type <- c(dots$type, "ffd")[1]
-    # optim <- c(dots$optim, "gradientDescent")[1]
-    # metric <- c(dots$metric, "mattesMI")[1]
-    # interpolator <- c(dots$interpolator, "linear")[1]
-    #
-    # out$reg <- .coregister(out$fixed, out$moving, type=type,
-    #                        optim=optim, metric=metric,
-    #                        interpolator=interpolator)
+    type <- c(dots$type, "ffd")[1]
+    optim <- c(dots$optim, "gradientDescent")[1]
+    metric <- c(dots$metric, "mattesMI")[1]
+    interpolator <- c(dots$interpolator, "linear")[1]
+
+    out$reg <- .coregister(out$fixed, out$moving, type=type,
+                           optim=optim, metric=metric,
+                           interpolator=interpolator)
 
     out
 }
