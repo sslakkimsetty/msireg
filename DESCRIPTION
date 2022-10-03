@@ -16,7 +16,6 @@ Imports:
     EBImage,
     graphics,
     Rtsne, 
-    SimpleITK, 
     sp
 Suggests: 
     testthat (>= 3.0.0),

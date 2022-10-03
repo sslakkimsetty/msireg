@@ -39,7 +39,6 @@
 #' @import EBImage
 #' @import Rtsne
 #' @import BiocParallel
-#' @import SimpleITK
 #' @export
 #'
 coregister <- function(mse, opt, mse_roi=NULL, opt_roi=NULL,
@@ -117,14 +116,14 @@ coregister <- function(mse, opt, mse_roi=NULL, opt_roi=NULL,
         opt_roi=opt_roi, spatial_scale=spatial_scale)
 
     # Registration
-    type <- c(dots$type, "ffd")[1]
-    optim <- c(dots$optim, "gradientDescent")[1]
-    metric <- c(dots$metric, "mattesMI")[1]
-    interpolator <- c(dots$interpolator, "linear")[1]
-
-    out$reg <- .coregister(out$fixed, out$moving, type=type,
-                           optim=optim, metric=metric,
-                           interpolator=interpolator)
+    # type <- c(dots$type, "ffd")[1]
+    # optim <- c(dots$optim, "gradientDescent")[1]
+    # metric <- c(dots$metric, "mattesMI")[1]
+    # interpolator <- c(dots$interpolator, "linear")[1]
+    #
+    # out$reg <- .coregister(out$fixed, out$moving, type=type,
+    #                        optim=optim, metric=metric,
+    #                        interpolator=interpolator)
 
     out
 }
@@ -312,13 +311,13 @@ prepareDataForCoreg <- function(msimg, opt, mse_roi=NULL, opt_roi=NULL,
     msimg <- channel(msimg, "luminance")
 
     # SimpleITK init
-    fixed <- SimpleITK::as.image(imageData(opt), isVector=FALSE)
-    moving <- SimpleITK::as.image(imageData(msimg), isVector=FALSE)
+    # fixed <- SimpleITK::as.image(imageData(opt), isVector=FALSE)
+    # moving <- SimpleITK::as.image(imageData(msimg), isVector=FALSE)
 
     out$opt <- opt
     out$msimg <- msimg
-    out$fixed <- fixed
-    out$moving <- moving
+    # out$fixed <- fixed
+    # out$moving <- moving
 
     out
 }
