@@ -306,10 +306,10 @@ prepareDataForCoreg <- function(msimg, opt, mse_roi=NULL, opt_roi=NULL,
 
     mse_roi <- resizeAndPadImageToMatchDims(Image(mse_roi), DIM)
     mse_roi <- matrix(as.logical(imageData(mse_roi)), nrow=DIM[1])
-    msimg <- applyROIOnImage(msimg, mse_roi)
 
     opt <- channel(opt, "luminance")
     msimg <- channel(msimg, "luminance")
+    msimg <- applyROIOnImage(msimg, mse_roi)
 
     # SimpleITK init
     fixed <- SimpleITK::as.image(imageData(opt), isVector=FALSE)
