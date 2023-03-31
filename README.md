@@ -26,7 +26,7 @@ devtools::install_github("sslakkimsetty/msireg")
 
 # Details
 
-*msicoreg* co-registers MS images with optical images (H&E stained, AF)
+*msireg* co-registers MS images with optical images (H&E stained, AF)
 using the family of registration methods from the `SimpleITK` package.
 The package offers processing and summarization of MS imaging data and
 optical images. This package uses spatial shrunken centroids method from
