@@ -244,10 +244,10 @@ coregister <- function(mse, opt, mse_roi=NULL, opt_roi=NULL,
     old <- .Random.seed
     on.exit({ .Random.seed <<- old })
     set.seed(2)
-    ssc <- spatialShrunkenCentroids(mse, r=c(0,1,2), s=c(3), k=c(15),
+    ssc <- spatialShrunkenCentroids(mse, r=c(0,1,2), s=c(0,3), k=c(15),
                                     method="gaussian", BPPARAM=BPPARAM)
-    topf <- matrix(vector("numeric", 30*3), nrow=3)
-    . <- sapply(1:3, function(x) {
+    topf <- matrix(vector("numeric", 30*6), nrow=6)
+    . <- sapply(1:6, function(x) {
         md <- modelData(ssc)[x, ]
         tops <- topFeatures(ssc, n=30, model=list(r=md$r, s=md$s, k=md$k))$mz
         topf[x, ] <<- tops
@@ -269,10 +269,10 @@ coregister <- function(mse, opt, mse_roi=NULL, opt_roi=NULL,
     max_iter <- 500
 
     if (ncol(ints) > 1000) {
-        partial_pca <- TRUE
+        pca <- TRUE
         max_iter <- 1000
     }
-    else if (ncol(ints) > 500) pca <- TRUE
+    else if (ncol(ints) > 30) pca <- TRUE
     else if (ncol(ints) <= 30) theta <- 0.1 # TEMP change theta=0.05
 
     out <- Rtsne(ints, dims=3, theta=theta, pca=pca, initial_dims=initial_dims,
@@ -312,8 +312,9 @@ prepareDataForCoreg <- function(msimg, opt, mse_roi=NULL, opt_roi=NULL,
     msimg <- applyROIOnImage(msimg, mse_roi)
 
     # SimpleITK init
-    fixed <- SimpleITK::as.image(imageData(opt), isVector=FALSE)
-    moving <- SimpleITK::as.image(imageData(msimg), isVector=FALSE)
+    # HERE
+    moving <- SimpleITK::as.image(imageData(opt), isVector=FALSE)
+    fixed <- SimpleITK::as.image(imageData(msimg), isVector=FALSE)
 
     out$opt <- opt
     out$msimg <- msimg
