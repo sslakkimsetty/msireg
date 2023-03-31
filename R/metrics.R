@@ -1,5 +1,21 @@
 
 
+#' Evaluate dice coefficient between two masks / ROIs
+#'
+#' `diceCoefFromMasks()` evaluates the dice coefficient between two 
+#'     corresponding masks or ROIs. Masks are considered binary 
+#'     matrices with the tissue labeled `TRUE` and background labeled 
+#'     `FALSE`. 
+#'
+#' @param mask1 A binary matrix consisting of a mask / ROI of an image 
+#' @param mask2 A binary matrix consisting of a mask / ROI of a 
+#'     corresponding image 
+#' @return Returns the dice coefficient (a measure of agreement or 
+#'     alignment) between the mask pair.
+#'
+#' @export
+#'
+
 diceCoefFromMasks <- function(mask1, mask2) {
     if (!identical(dim(mask1), dim(mask2))) {
         mask2 <- resizeMask(mask1, mask2)
@@ -11,8 +27,22 @@ diceCoefFromMasks <- function(mask1, mask2) {
     a <- mean(mask1)
     b <- mean(mask2)
     (2 * aINTb) / (a + b)
-}
+} 
 
+
+#' Resize a mask to given dimensions
+#'
+#' `resizeMask()` resizes `target` mask to a given dimensions (`ref`). 
+#'     Resizing is done using bilinear interpolation. `target` mask 
+#'     should be a binary matrix. 
+#'
+#' @param ref Dimensions (a vector) to which the mask (`target`) is 
+#'     resized
+#' @param target Binary mask (matrix) to be resized
+#' @return Returns a binary matrix resized to the given dimensions  
+#'
+#' @export
+#'
 
 resizeMask <- function(ref, target) {
     out <- resize(target, w=dim(ref)[1], h=dim(ref)[2])
@@ -21,6 +51,19 @@ resizeMask <- function(ref, target) {
 }
 
 
+#' Transform a mask using a `SimpleITK`'s transformation object
+#'
+#' `applyTransformOnMask()` applies the transformation from 
+#'     `SimpleITK`. Resampling is done using `SimpleITK`. 
+#'
+#' @param mask Mask to be transformed 
+#' @param tf Transformation object from `SimpleITK` (generally a 
+#'     `CompositeTransform` object)
+#' @return Returns a binary matrix after transformation 
+#'
+#' @export
+#'
+
 applyTransformOnMask <- function(mask, tf) {
     mask <- SimpleITK::as.image(mask, isVector=FALSE)
     mask <- Resample(mask, tf)
@@ -28,6 +71,20 @@ applyTransformOnMask <- function(mask, tf) {
     ifelse(as.array(mask) > 0.5, 1, 0)
 }
 
+
+#' Evaluate the normalized cross correlation metric 
+#'
+#' `normalizedCrossCorr()` computes the normalized cross correlation 
+#'     between a pair of images. The images have to be identical in 
+#'     dimensions. 
+#'
+#' @param img1 An intensity array of an image 
+#' @param img2 An intensity array of the corresponding image 
+#' @return Returns a value of the normalized cross correlation  
+#'
+#' @export
+#'
+#' 
 
 normalizedCrossCorr <- function(img1, img2) {
     img1 <- img1 - mean(img1)
@@ -39,6 +96,33 @@ normalizedCrossCorr <- function(img1, img2) {
     out1 / out2
 }
 
+
+#' Evaluate the jacobian determinant of a transform
+#'
+#' `jacobianDeterminantFromTransform()` computes the jacobian 
+#'     determinant from a `SimpleITK` transform object. 
+#'     Jacobian determinant informs the transformation quality 
+#'     such as image folding. 
+#'     
+#'     Jacobian determinant
+#'         = 1: no transformation 
+#'         > 1: expansion 
+#'         < 1: contraction 
+#'         < 0: folding 
+#' 
+#' @param tf `SimpleITK` transform object (generally a 
+#'     `CompositeTransform` object) 
+#' @param dim Spatial dimensions of the reference image (either 
+#'     this parameter or `ref_img` needs to be provided)
+#' @param ref_img A reference image (generally the moving image) 
+#'     (either `dim` or this parameter needs to be provided)
+#' @return Returns a matrix of the same size as `dim` or that of 
+#'     the `ref_img`. Values of the matrix are the jacobian 
+#'     deterimant at that position 
+#'
+#' @export
+#'
+#' 
 
 jacobianDeterminantFromTransform <- function(tf, dim=NULL, ref_img=NULL,
                                              simpleITK_for_det=TRUE) {
@@ -69,6 +153,29 @@ jacobianDeterminantFromTransform <- function(tf, dim=NULL, ref_img=NULL,
     out
 }
 
+
+#' Evaluate the jacobian determinant from a displacement 
+#'     field
+#'
+#' `displacementFieldJacobianDeterminant()` computes the jacobian 
+#'     determinant from a displacement field. Displacement field 
+#'     should be (X, Y, 2) shape, where X and Y are spatial 
+#'     dimensions of the images. 
+#'     
+#'     Jacobian determinant
+#'         = 1: no transformation 
+#'         > 1: expansion 
+#'         < 1: contraction 
+#'         < 0: folding 
+#' 
+#' @param displ_field Displacement field (vector) of a 
+#'     transformation 
+#' @return Returns a matrix of the same size as that of the 
+#'     `displ_field`. Values of the matrix are the jacobian 
+#'     deterimant at that position 
+#'
+#' @export
+#'
 
 displacementFieldJacobianDeterminant <- function(displ_field=NULL) {
     d <- dim(displ_field)
