@@ -183,7 +183,7 @@ coregister <- function(mse, opt, mse_roi=NULL, opt_roi=NULL,
             stop("exiting method ... \n")
         } else if (sel) {
             if (verbose) message(.m33)
-            return( constructROIFromMSIImage(mse, attrs=attrs) )
+            return( constructROIFromMSImage(mse, attrs=attrs) )
         } else {
             if (verbose) message(.m2)
             return( multiSelectROI(mse, mz=mz) )

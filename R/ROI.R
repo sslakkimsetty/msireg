@@ -29,7 +29,10 @@ multiSelectROI <- function(mse, mz, rasterize=TRUE, ...) {
         roi <- (roi | .roi)
         sel <- askYesNo(paste0("Do you want to select another ",
             "ROI on the same tissue?"))
-    }
+    } 
+
+    # roiFromMSImage <- constructROIFromMSImage(mse) 
+    # roi <- roi & roiFromMSImage
 
     if (rasterize) rasterizeROIFromCardinal(mse, roi)
     else roi
@@ -147,7 +150,14 @@ applyROIOnImage <- function(img, roi) {
 
 rasterizeROIFromCardinal <- function(mse, roi, byrow=FALSE) {
     out <- matrix(rep(FALSE, prod(dims(mse))), nrow=dims(mse)[1])
-    out[as.matrix(coord(mse))] <- roi # coord(mse) is row major and
+    
+    # Correct MSI coord offset for x and y 
+    .coord <- coord(mse) 
+    .coord$x <- .coord$x - min(.coord$x) + 1 
+    .coord$y <- .coord$y - min(.coord$y) + 1 
+    coords <- as.matrix(.coord[, 1:2]) 
+
+    out[coords] <- roi # coord(mse) is row major and
     # Cardinal's selectROI logical vector is also row major
 
     if (byrow) t(out)
@@ -158,8 +168,18 @@ rasterizeROIFromCardinal <- function(mse, roi, byrow=FALSE) {
 # If ROI is not provided in arguments of `msireg::coregister()`, ROI
 #     is inferred to be the existing pixels in the MSI data.
 
-constructROIFromMSIImage <- function(mse, attrs=NULL) {
-    coords <- as.matrix(coord(mse)[, 1:2])
+constructROIFromMSImage <- function(mse, attrs) {
+    # Correct for MSI image coord offsets
+    .coord <- coord(mse) 
+    .coord$x <- .coord$x - min(.coord$x) + 1 
+    .coord$y <- .coord$y - min(.coord$y) + 1 
+    coords <- as.matrix(.coord[, 1:2]) 
+
+    if (is.null(attrs)) {
+        attrs <- list(
+            nX = dims(mse)[1], nY = dims(mse)[2]
+        )
+    }
 
     roi <- matrix(rep(FALSE, attrs$nX * attrs$nY), ncol=attrs$nY)
     roi[coords] <- TRUE
