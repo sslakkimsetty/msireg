@@ -1,0 +1,101 @@
+---
+title: "Stochasticity observation in `msireg` package"
+author: "Sai Srikanth Lakkimsetty"
+date: "Feb, 2023"
+output:
+    BiocStyle::html_document:
+    toc: true 
+vignette: >
+  %\VignetteIndexEntry{Stochasticity observation in `msireg` package} 
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, echo=FALSE, message=FALSE}
+# A flag to manage chunk re-runs while knitting 
+# (could also use cache option, but tricky) 
+# Set SHARING to FALSE if you are re-knitting the code and variables are already 
+# in the environment. Manage individual code chunk evaluation with "eval" option. 
+SHARING <- FALSE 
+
+if (SHARING) {
+    library("msireg") 
+} else {
+    library("devtools")
+    load_all()
+} 
+
+RNGkind("L'Ecuyer-CMRG") 
+
+setCardinalBPPARAM(MulticoreParam(stop.on.error=FALSE, progressbar=TRUE))
+setCardinalVerbose(TRUE)
+```
+
+```{r style, echo=FALSE, results="asis", eval=TRUE}
+BiocStyle::markdown()
+```
+
+
+# Introduction  
+
+In this vignette, we try to reproduce the stochasticity of processed grayscaled versions of MSI images obtained through the `msireg` package. We achieve this analysis through the same series of steps that `msireg` takes. The dataset we use is the mouse bladder one. 
+
+* First, we investigate if this is the result of `Cardinal`'s pre-processing methods. This is unlikely but we include this in the instrest of being comprehensive. 
+* Second, we see if SSC is the culprit. This could be very likely as `msireg` does set a seed. 
+* Lastly, we move on to `Rtsne`. 
+
+
+```{r data-load, eval=SHARING} 
+DATAPATH <- "/Users/lakkimsetty.s/Library/Mobile Documents/com~apple~CloudDocs/00-NEU/2-Ind-Study/9-data"
+CURRPATH <- "2-hr2msi-mouse-urinary-bladder"
+
+msi_filename <- "HR2MSI mouse urinary bladder S096.imzML"
+
+mse <- readMSIData(file.path(DATAPATH, CURRPATH, msi_filename))
+``` 
+
+
+# \texttt{Cardinal}'s pre-processing 
+
+
+| Performance metric | Before coreg | After coreg | 
+|:-------------------|:------------:|:-----------:| 
+| Dice coefficient | 95.52% | 99.59% | 
+| Normalized cross correlation | 86.3% | 95.4% | 
+| Jacobian determinant | - | 0.25% (folding) | 
+
+
+| Performance metric | Before coreg | After coreg | 
+|:-------------------|:------------:|:-----------:| 
+| Dice coefficient | 82.66% | 95.74% | 
+| Normalized cross correlation | 75.6% | 88.2% | 
+| Jacobian determinant | - | 0.13% (folding) | 
+
+
+| Performance metric | Without filtering | With filtering | 
+|:-------------------|:------------:|:-----------:| 
+| Dice coefficient | 98.08% | 99.59% | 
+| Normalized cross correlation | 90.5% | 95.4% | 
+| Jacobian determinant | 0.22%  | 0.25% (folding) | 
+
+
+| Performance metric | Without filtering | With filtering | 
+|:-------------------|:------------:|:-----------:| 
+| Dice coefficient | 90.54% | 95.74% | 
+| Normalized cross correlation | 81.9% | 88.2% | 
+| Jacobian determinant | 0.40 | 0.13% (folding) | 
+
+
+
+| Technical details | 
+|:-------------------|:------------:| 
+| MS image format | imzML, ibd | 
+| Microscopic image format | tiff, png, jpg | 
+| Availability | Open source at https://github.com/sslakkimsetty/msireg | 
+
+
+# Session info
+
+```{r session-info} 
+sessionInfo()
+```

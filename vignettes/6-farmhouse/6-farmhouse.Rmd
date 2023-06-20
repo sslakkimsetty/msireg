@@ -1,0 +1,439 @@
+---
+title: "Co-registration of Farmhouse dataset"
+author: "Sai Srikanth Lakkimsetty"
+date: "Jan, 2023"
+output:
+    BiocStyle::html_document:
+    toc: true 
+vignette: >
+  %\VignetteIndexEntry{Co-registration of mouse bladder dataset} 
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, echo=FALSE, message=FALSE}
+# A flag to manage chunk re-runs while knitting 
+# (could also use cache option, but tricky) 
+# Set SHARING to FALSE if you are re-knitting the code and variables are already 
+# in the environment. Manage individual code chunk evaluation with "eval" option. 
+SHARING <- FALSE 
+
+if (SHARING) {
+    library("msireg") 
+} else {
+    library("devtools")
+    load_all()
+} 
+
+library("ggplot2")
+# RNGkind("L'Ecuyer-CMRG") 
+
+setCardinalBPPARAM(MulticoreParam(stop.on.error=FALSE, progressbar=TRUE))
+setCardinalVerbose(TRUE)
+```
+
+```{r style, echo=FALSE, results='asis', eval=TRUE}
+BiocStyle::markdown()
+```
+
+
+# Introduction  
+
+In this vignette, we illustrate the co-registration between a farmhouse painting that is imaged using DESI instrument. This dataset is notable for its very low spatial resolution and identifiable global and local distortions which makes registration tricky.
+
+There are four key inputs to the registration workflow. These are the fixed image, the moving image, MSI region of interest (ROI) and optical image ROI. We consider the MS image as the *fixed image* and the optical image as the *moving image*. That means, the optical (microscopic) image is transformed to align with the MS image. The regions of interest (ROIs) provide the registration method with information on where the tissue is present in the slide. It is essential that the registration method knows where the background is present to exclude it from registration process. 
+
+Similarly there are four key steps to registering MS and optical images. We shall discuss more about the steps as we perform them. 
+
+* Pre-processing MS and optical images 
+* ROI selection of the images
+* Pre-alignment 
+* Registration 
+
+We load the MS and optical images into R as below. 
+
+```{r data-load, eval=SHARING} 
+DATAPATH <- "/Users/lakkimsetty.s/Library/Mobile Documents/com~apple~CloudDocs/00-NEU/2-Ind-Study/9-data"
+CURRPATH <- "5-farmhouse"
+
+msi_filename <- "farmhouse.rdata"
+opt_filename <- "farmhouse.png"
+
+load(file.path(DATAPATH, CURRPATH, msi_filename)) 
+mse <- farmhouse 
+rm(farmhouse) 
+mse <- as(mse, "MSImagingExperiment")
+
+opt <- EBImage::readImage(file.path(DATAPATH, CURRPATH, opt_filename))
+```
+
+
+# MS image pre-processing 
+
+Before pre-processing the MSI data, we specify the a parallelization-safe RNG to ensure reproducibility even on parallel computation. Pre-processing is performed to clean up the spectra by removing noise. It includes peak picking, aligning, filtering and binning. We first construct a mean spectrum across all spectra. 
+
+```{r pre-proc, eval=SHARING}  
+RNGkind("L'Ecuyer-CMRG") 
+
+# mse_mean <- summarizeFeatures(mse, FUN="mean",
+#     BPPARAM=MulticoreParam(workers=multicoreWorkers()))
+# 
+# ref <- mse_mean |>
+#     peakPick(method="mad", SNR=5) |>
+#     peakAlign("mean", tolerance=40, units="ppm") |>
+#     peakFilter() |>
+#     process()
+# 
+# mse_peaks <- mse |>
+#     normalize(method="tic") |>
+#     peakBin(ref=mz(ref), tolerance=100, units="ppm") |>
+#     process() 
+
+mse_peaks <- mse 
+``` 
+
+
+Once the pre-processing is completed, we save the MSI data (peaks) to avoid having to pre-process the data again in case we want to re-run the registration workflow. 
+
+```{r save-proc-imzml, eval=SHARING} 
+# writeMSIData(mse_peaks,
+#              file.path(DATAPATH, CURRPATH,
+#                        "processed-in-R/farmhouse.imzML"))
+```
+
+
+# Identifying regions-of-interest (ROIs) 
+
+First, we make a list of the processed data attributes: X and Y spatial resolution of processed MSI data; number of features and pixels of processed MSI data; and X and Y spatial resolution of optical image. 
+
+```{r mse-params, eval=SHARING} 
+mse_attrs <- list(
+    nX = dims(mse_peaks)[1], nY = dims(mse_peaks)[2],
+    nF = dim(mse_peaks)[1], nP = dim(mse_peaks)[2],
+    nXo = dim(opt)[1], nYo = dim(opt)[2]
+)
+```
+
+
+## MSI ROI 
+`msireg` provides an in-built tool to generate ROI for MSI tissue. We select ROI using the function `multiSelectROI` which is built on `Cardinal`'s `selectROI` method. `multiSelectROI` can select multiple disconnected tissue regions in one go. The method `multiSelectROI` needs an `mz` value to display a raster on which ROI is selected. 
+
+If you already have a `mz` value that properly demarcates tissue and background, skip the next two code blocks. Otherwise, we build a quick spatial shrunken centroid model (refer `?spatialShrunkenCentroids` for details) to come up with a list of `mz` values that are suitable for this task. The `mz` list is derived from the `ssc` model's top features. This is a reliable way to select one `mz` value for ROI selection. 
+
+```{r viz-ssc, eval=SHARING} 
+set.seed(2)
+ssc <- spatialShrunkenCentroids(mse_peaks, r=c(1), s=c(24), k=c(15), 
+    method="gaussian", BPPARAM=MulticoreParam()) 
+topf <- topFeatures(ssc, n=10, model=list(s=24))$mz 
+
+message("Good features for initial visualization: ")
+print(topf[1:8]) 
+``` 
+
+
+From the `mz` values in topf, we need not select one `mz` value for selecting ROI. We can choose to superpose multiple `mz` values. To select the ROI using a mouse on the plotting pane, run the below command directly from console. 
+
+```{r msi-roi, eval=SHARING} 
+# RUN DIRECTLY FROM CONSOLE, SESSION WILL CRASH OTHERWISE 
+mse_roi <- multiSelectROI(mse_peaks, mz=topf, superpose=TRUE) 
+``` 
+
+
+## Optical image ROI 
+
+We use `multiDrawROI` to select ROI for optical images. The usage is identical to that of `multiSelectROI` (without the need for a `mz` value). It is to be executed directly from console to prevent R session from crashing. 
+
+```{r opt-roi, eval=SHARING}
+# RUN DIRECTLY FROM CONSOLE, SESSION WILL CRASH OTHERWISE 
+opt_roi <- multiDrawROI(opt)
+```
+
+
+# Pre-alignment of images
+
+So far, we have performed pre-processing and ROI selection of the images. Before doing the registration step, we process the images to ensure the images are overlapping. Often, the tissues on the imaged slide are at different (non-overlapping) positions. That means the burden of first bringing the images together falls on the registration method, which could affect registration performance. To alleviate this problem, we ensure overlap of two images by cropping and padding. We crop and/or pad optical (moving) image so that it overlaps with the tissue of the MS (fixed) image. To clarify, we are not registering the images in this step (no transformations of the grid) but we do keep track of the the cropping and padding operations to ensure reproducibility. 
+
+```{r opt-mask-img-crop, eval=SHARING} 
+OUT <- cropToEdgesAndPadZeros(ref_mask=mse_roi, target_mask=opt_roi, 
+                              target_img=opt) 
+opt <- OUT$img 
+opt_roi <- OUT$mask 
+``` 
+
+
+# Registration 
+
+We register the MS image (pre-processed `mse_peaks`) and the optical image (`opt`) using the `coregister`. A scaling factor, `spatial_scale`, allows the method to register the images at a higher / lower resolution (with respect to the `mse`'s spatial dimensions). This is to overcome the imaging resolution disparity between MSI and optical images. The method returns a list. The registration components can be accessed using the `$`. 
+
+```{r coreg, eval=SHARING}
+OUT <- coregister(mse=mse_peaks, opt=opt, mse_roi=mse_roi, opt_roi=opt_roi, spatial_scale=4, 
+                  BPPARAM=MulticoreParam(), verbose=TRUE) 
+```
+
+
+Before viewing the results, we save the environment and the transform to file. 
+
+```{r, coreg-write-to-file, eval=SHARING} 
+save.image("~/Documents/1-saved-envs/vignettes/6-farmhouse.RData") 
+WriteTransform(OUT$reg$TF, "/Users/lakkimsetty.s/Library/Mobile Documents/com~apple~CloudDocs/01-NU/phd/msireg/data/saved-transforms/6-farmhouse.hdf5")
+```
+
+
+We visualize the results of the registration. We use the method `Resample` from `SimpleITK` to obtain the transformed moving image. The plot below shows the overlays of the MS (fixed) image and the optical (moving) images' overlays before and after registration. 
+
+```{r viz-coreg-prep, eval=TRUE} 
+# library("devtools")
+# load_all()
+# load("~/Documents/1-saved-envs/vignettes/6-farmhouse.RData")
+# OUT$reg$TF <- ReadTransform("data/saved-transforms/1-mouse-bladder.hdf5")
+out <- rlang::duplicate(OUT)
+out$fixed <- SimpleITK::as.image(out$opt, isVector=FALSE)
+out$moving <- SimpleITK::as.image(out$msimg, isVector=FALSE)
+
+out$msimgx <- Resample(out$moving, out$reg$TF) |> as.array() |> Image() 
+
+overlay <- overlayGridOnImage(out$msimgx)$overlay |> as.image()
+grid <- overlayGridOnImage(out$msimgx)$grid |> as.image()
+
+out$overlayx <- Resample(overlay, out$reg$TF) |> as.array() |> Image()
+out$gridx <- Resample(grid, out$reg$TF) |> as.array() |> Image()
+```
+
+
+```{r viz-coreg, eval=TRUE} 
+alpha <- 0.45
+out$movingx <- Resample(out$moving, out$reg$TF)
+.fixed <- out$fixed |> as.array() |> Image()
+.moving <- out$moving |> as.array() |> Image()
+.movingx <- out$movingx |> as.array() |> Image()
+
+ol1 <- (.fixed * alpha + .moving * (1-alpha))
+ol2 <- (.fixed * alpha + .movingx * (1-alpha))
+
+def.par <- par(no.readonly=TRUE)
+
+height <- 7
+width <- 7 * (dim(.fixed)[1] / dim(.fixed)[2])
+
+titles <- c("Mass spec. image", "Optical image",
+            "Overlay before registration", "Overlay after registration")
+
+par(mar=c(0.25, 0.25, 0.75, 0.25))
+pl <- layout(mat=matrix(c(1:4), ncol=2, byrow=TRUE),
+             heights=rep(height/2, 2), widths=rep(width/2, 2),
+             respect=TRUE)
+
+. <- sapply(c(1:4), function(x) {
+    plot.new()
+    rasterImage(list(.fixed, .moving, ol1, ol2)[[x]],
+                xleft=0, xright=1, ytop=0, ybottom=1,
+                interpolate=FALSE)
+    title(titles[x])
+})
+```
+
+
+Individual overlays, `ol1` (before registration) and `ol2` (after registration) are images of class `EBImage`. They can be viewed using `EBImage::display` method. 
+
+```{r coreg-grid-overlay-viz, eval=TRUE} 
+# height <- 3.5
+# width <- 7 * (dim(.fixed)[1] / dim(.fixed)[2])
+# 
+# pl <- layout(mat=matrix(c(1:2), ncol=2, byrow=TRUE),
+#              heights=height, widths=rep(width/2, 2),
+#              respect=TRUE) 
+# titles <- c("warping on grid", "overlay with grid warping") 
+# par(mar=c(0.25, 0.25, 0.75, 0.25))
+# . <- sapply(c(1:2), function(x) {
+#     plot.new()
+#     rasterImage(list(out$gridx, out$overlayx)[[x]],
+#                 xleft=0, xright=1, ytop=0, ybottom=1,
+#                 interpolate=FALSE) 
+#     title(titles[x])
+# })
+# par(def.par)
+```
+
+
+# Registration performance 
+
+There is no **single** metric that perfectly assesses the registration quality. We assess the registration performance using a variety of performance metrics. Some of them are below. 
+* Sørensen-Dice coef. - Dice 
+* Correlation ratio - Roche et. al. 
+* Dense vector field jacobian 
+* Normalized gradient field - Modersitzki & Haber 
+
+
+## Dice coefficient 
+
+Dice coefficient is computed from MSI and OPT masks. Dice coefficient before 
+and after registration is `r D_prereg` and `r D_postreg` respectively. 
+
+```{r metric-dice, eval=TRUE} 
+spatial_scale <- 4 
+DIM <- dim(out$MSIMG)[1:2] * spatial_scale
+D_prereg <- diceCoefFromMasks(mse_roi, opt_roi) 
+mse_roi_ss <- resizeAndPadImageToMatchDims(mse_roi, DIM) 
+opt_roi_ss <- resizeAndPadImageToMatchDims(opt_roi, DIM) 
+mse_roi_ss_x <- applyTransformOnMask(mse_roi_ss, out$reg$TF) 
+D_postreg <- diceCoefFromMasks(mse_roi_ss_x, opt_roi_ss) 
+```
+
+Dice coefficient before registration is `r round(D_prereg, 3)`.  
+Dice coefficient after registration is `r round(D_postreg, 3)`. 
+
+We also visualize the overlap of MS and optical images before and after registration. This provides insight into the registration performance globally. 
+
+```{r metric-dice-viz} 
+ol3 <- t(opt_roi_ss * 0.5 + mse_roi_ss * 0.5)
+ol4 <- t(opt_roi_ss * 0.5 + mse_roi_ss_x * 0.5)
+
+height <- 3.5
+width <- 7 * (dim(.fixed)[1] / dim(.fixed)[2])
+
+pl <- layout(mat=matrix(c(1:2), ncol=2, byrow=TRUE),
+             heights=height, widths=rep(width/2, 2),
+             respect=TRUE) 
+titles <- c("Masks overlap before coreg", "Masks overlap after coreg") 
+par(mar=c(0.25, 0.25, 0.75, 0.25))
+. <- sapply(c(1:2), function(x) {
+    plot.new()
+    rasterImage(list(ol3, ol4)[[x]],
+                xleft=0, xright=1, ytop=0, ybottom=1,
+                interpolate=FALSE) 
+    title(titles[x])
+})
+par(def.par)
+```
+
+
+## Normalized cross correlation 
+
+Normalized cross correlation is a similarity metric that measure correlation 
+between pixel intensities. It ranges from `-1` to `1`. The values before and 
+after co-registration are `r ncc_prereg` and `r ncc_postreg` respectively. 
+
+```{r ncc} 
+ncc_prereg <- normalizedCrossCorr(.fixed, .moving) 
+ncc_postreg <- normalizedCrossCorr(.fixed, .movingx) 
+```
+
+
+## Displacement field jacobian determinant 
+
+The Jacobian, $J$'s determinant is used to measure the folding of a 
+transformation. ***Folding*** is an artefact of the registration process wherein 
+a location of the moving image is displaced beyond its neighbor _in that 
+direction_. In other words, the image is made to fold onto itself. Folding 
+is more common during more aggressive registration methods where smoothing or 
+regularization is avoided. 
+
+The Jacobian is expressed as a matrix of partial derivatives of components 
+(displacements) with respect to the spatial coordinate system. 
+
+Values of the determinant 
+
+* = 1 imply no area (or volume) change 
+* (> 1) imply increased area
+* (1, 0) imply reduced area 
+* < 0 imply folding <- this is bad 
+
+```{r jacobian} 
+jac <- jacobianDeterminantFromTransform(out$reg$TF, ref_img=out$moving) 
+hist(jac$jacobian_det, breaks=40)
+```
+
+
+```{r jacobian-viz-try1, eval=FALSE} 
+jac$jacobian_det |> EBImage::display("raster") 
+imagePlot(t(flip(jac$jacobian_det)))
+```
+
+
+```{r, jacobian-viz, eval=TRUE} 
+def.par <- par(no.readonly=TRUE)
+jacdet <- jac$jacobian_det
+d <- dim(jacdet) 
+asp <- d[2] / d[1] # h / w 
+w <- 9 
+h <- asp * w 
+
+jacdet[jacdet <= 0] <- 0 
+nfolds <- sum((jacdet == 0))
+nshrinks <- length(unique(jacdet[(jacdet > 0) & (jacdet < 1)])) 
+nequals <- sum(jacdet == 1)
+nexpands <- length(unique(jacdet[(jacdet > 1)])) 
+
+folds <- if (nfolds == 0) c() else c("#FF0000") # red 
+shrinks <- hcl.colors(n=nshrinks, palette="Oranges") # white to oranges
+equals <- if (nequals == 0) c() else c("#FFFFFF") # white
+expands <- hcl.colors(n=nexpands, palette="Blues", rev=TRUE) # white to blues
+
+layout(mat=matrix(1, nrow=1, ncol=1), heights=h, widths=w, respect=TRUE)
+fields::imagePlot(flip(jacdet), asp=d[2]/d[1], xaxt="n", yaxt="n", 
+          col=c(folds, shrinks, equals, expands), 
+          lowerTriangle=TRUE)
+
+par(def.par)
+```
+
+
+```{r gradient-field-cosine-dist, eval=SHARING, echo=FALSE, eval=FALSE} 
+img1 <- .fixed
+img2 <- .moving
+img2x <- .movingx
+
+grads1 <- matrixGradients(imageData(img1))
+grads2 <- matrixGradients(imageData(img2))
+grads2x <- matrixGradients(imageData(img2x))
+
+.grads1 <- normalizeGradients(grads1)
+.grads2 <- normalizeGradients(grads2)
+.grads2x <- normalizeGradients(grads2x)
+
+D <- dim(img1)
+
+.grads <- array(c(.grads1, .grads2), dim=c(D, 4))
+cos_dist <- apply(.grads, c(1,2), function(x) {
+    if (identical(x[c(1:2)], x[c(3:4)])) return(1)
+
+    (sum( x[c(1:2)] * x[c(3:4)] ))
+}) |>
+    array(dim=dim(img1))
+
+
+.gradsx <- array(c(.grads1, .grads2x), dim=c(D, 4))
+cos_distx <- apply(.gradsx, c(1,2), function(x) {
+    if (identical(x[c(1:2)], x[c(3:4)])) return(1)
+
+    (sum( x[c(1:2)] * x[c(3:4)] ))
+}) |>
+    array(dim=dim(img1))
+```
+
+
+```{r gradient-cosine-dist-plots, eval=FALSE, echo=FALSE} 
+height <- 3.5
+width <- 7 * (dim(.fixed)[1] / dim(.fixed)[2])
+
+pl <- layout(mat=matrix(c(1:2), ncol=2, byrow=TRUE),
+             heights=height, widths=rep(width/2, 2),
+             respect=TRUE) 
+titles <- c("Cosine dist before reg", "Cosine distance after reg") 
+par(mar=c(0.25, 0.25, 0.75, 0.25))
+. <- sapply(c(1:2), function(x) {
+    plot.new()
+    rasterImage(list(t(1-cos_dist), t(1-cos_distx))[[x]],
+                xleft=0, xright=1, ytop=0, ybottom=1,
+                interpolate=FALSE) 
+    title(titles[x])
+})
+par(def.par)
+```
+
+
+# Session info
+
+```{r session-info} 
+sessionInfo()
+```
