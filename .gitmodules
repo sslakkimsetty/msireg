@@ -1,0 +1,3 @@
+[submodule "MSIreg-vignettes"]
+	path = MSIreg-vignettes
+	url = https://github.com/Vitek-Lab/MSIreg-vignettes
