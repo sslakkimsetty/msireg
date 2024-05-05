@@ -1,9 +1,10 @@
 
 
-overlayGridOnImage <- function(img, color=NULL,
-                               scale_factor=4, overlay_weight=0.8) {
+overlayGridOnImage <- function(img, color=NULL, scale_factor=4, 
+    overlay_weight=0.8, nsteps=50) {
     out <- list()
-    grid <- constructNDGrid(img, scale_factor=scale_factor)
+    grid <- constructNDGrid(img, scale_factor=scale_factor, 
+        nsteps=nsteps)
 
     colormode <- Grayscale
     if (length(dim(img)) > 2) colormode <- Color
@@ -25,10 +26,10 @@ overlayGridOnImage <- function(img, color=NULL,
 }
 
 
-constructNDGrid <- function(img, scale_factor=4) {
+constructNDGrid <- function(img, scale_factor=4, nsteps=50) {
     dim <- dim(img)
     dim[1:2] <- dim(img)[1:2] * scale_factor
-    out <- .construct2DGrid(dim=dim[1:2])
+    out <- .construct2DGrid(dim=dim[1:2], nsteps=nsteps)
 
     if (length(dim) > 2) {
         out <- array(rep(out, dim[3]), dim=dim)
@@ -38,16 +39,19 @@ constructNDGrid <- function(img, scale_factor=4) {
 }
 
 
-.construct2DGrid <- function(dim=c(200,200)) {
+.construct2DGrid <- function(dim=c(200,200), nsteps=50) {
     w <- dim[1]
     h <- dim[2]
     img <- matrix(0, nrow=dim[1], ncol=dim[2])
+    
+    # Shorter edge gets at least 'nsteps' partitions
+    .step <- floor(min(w, h) / nsteps)
 
     x <- c(1:w)
-    y <- seq(from=1, by=10, length.out=floor(h/10))
+    y <- seq(from=1, by=.step, length.out=floor(h/.step))
     img <- .modifyGridMatrix(img, x, y)
 
-    x <- seq(from=1, by=10, length.out=floor(w/10))
+    x <- seq(from=1, by=.step, length.out=floor(w/.step))
     y <- c(1:h)
     img <- .modifyGridMatrix(img, x, y)
     img
