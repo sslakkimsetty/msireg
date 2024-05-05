@@ -45,7 +45,7 @@ commandMultiIteration <- function(method) {
                                  "meanSquares", "mattesMI"),
                         interpolator=c("linear", "bspline", "nearest"),
                         sampling_strategy=c("RANDOM", "REGULAR", "NONE"),
-                        sampling_percentage=0.01, out_transform=c()) {
+                        sampling_percentage=0.05, out_transform=c()) {
     out <- list()
     out$fixed <- fixed
     out$moving <- moving
@@ -88,8 +88,8 @@ commandMultiIteration <- function(method) {
     out$reg$SetMetricSamplingPercentage(sampling_percentage)
     out$reg$SetOptimizerScalesFromPhysicalShift()
 
-    out$reg$SetShrinkFactorsPerLevel(shrinkFactors = c(4,2,1))
-    out$reg$SetSmoothingSigmasPerLevel(smoothingSigmas=c(4,2,1))
+    out$reg$SetShrinkFactorsPerLevel(shrinkFactors = c(6,2,1))
+    out$reg$SetSmoothingSigmasPerLevel(smoothingSigmas=c(6,2,1))
     out$reg$SmoothingSigmasAreSpecifiedInPhysicalUnitsOn()
 
     # Execute the registration method
@@ -156,7 +156,7 @@ register.type.ffd <- function(x) {
 
 register.metric.mattesMI <- function(x) {
     x$reg$SetMetricAsMattesMutualInformation(
-        numberOfHistogramBins=50)
+        numberOfHistogramBins=100)
     x
 }
 
@@ -173,8 +173,8 @@ register.optim.gd <- function(x) {
 
 
 register.optim.lbfgsb <- function(x) {
-    x$reg$SetOptimizerAsLBFGSB(gradientConvergenceTolerance=1e-7,
-        numberOfIterations=100)
+    x$reg$SetOptimizerAsLBFGSB(gradientConvergenceTolerance=5e-7,
+        numberOfIterations=5000)
     x
 }
 
