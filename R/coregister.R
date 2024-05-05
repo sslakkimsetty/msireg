@@ -313,8 +313,8 @@ prepareDataForCoreg <- function(msimg, opt, mse_roi=NULL, opt_roi=NULL,
 
     # SimpleITK init
     # HERE
-    moving <- SimpleITK::as.image(imageData(opt), isVector=FALSE)
-    fixed <- SimpleITK::as.image(imageData(msimg), isVector=FALSE)
+    moving <- SimpleITK::as.image(imageData(msimg), isVector=FALSE)
+    fixed <- SimpleITK::as.image(imageData(opt), isVector=FALSE)
 
     out$opt <- opt
     out$msimg <- msimg
