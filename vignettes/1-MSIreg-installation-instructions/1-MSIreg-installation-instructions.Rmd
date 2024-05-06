@@ -1,0 +1,98 @@
+---
+title: "Installation of MSIreg on Windows using Windows Subsystem for Linux"
+author: "Andreas Weber, Dr. Niko Pinter"
+date: "3/31/2023"
+output:
+  BiocStyle::html_document:
+  html_document:
+    toc: true
+    toc_float: true
+    toc_collapsed: true
+---
+
+```{r style, echo=FALSE, results='asis'}
+BiocStyle::markdown()
+library(knitr)
+knitr::knit_engines$set(python = reticulate::eng_python)
+```
+
+# Introduction
+Installing software packages on Windows operating system can sometimes be a challenge due to compatibility issues. However, with the help of Windows Subsystem for Linux (WSL) and RStudio Server, users can overcome these obstacles and install packages such as MSIREG with ease.
+
+MSIREG is an R package that provides a pipeline for the registration and analysis of MSI images. In this guide, we will walk you through the steps to install MSIREG on Windows using WSL and RStudio Server. With the help of these tools, you will be able to install and run MSIREG on your Windows system without any compatibility issues. So, let's get started!
+
+
+# Installation
+Step 1: Create Conda environment
+------------------------------------------------------------------------
+Open an Ubuntu terminal shell and create a new Conda environment called "msireg" by running the following command:
+```{r, engine = 'bash', eval = FALSE}
+conda create -n msireg
+```
+
+
+Step 2: Activate Conda environment
+------------------------------------------------------------------------
+Activate the newly created Conda environment by running the following command:
+```{r, engine = 'bash', eval = FALSE}
+conda activate msireg
+```
+
+Step 3: Install necessary packages
+------------------------------------------------------------------------
+Next, install the necessary packages using the following command from within the Conda environment:
+```{r, engine = 'bash', eval = FALSE}
+conda install -c conda-forge -c bioconda r-base r-devtools SimpleITK bioconductor-ebimage bioconductor-cardinal bioconductor-biocparallel r-rtsne
+```
+
+Consider adding these version numbers to avoid dependency incompatibilities with MSIreg
+```{r, engine = 'bash', eval = FALSE}
+conda install -c conda-forge -c bioconda r-base=4.2.2 r-devtools=2.4.5 SimpleITK=2.2.1 bioconductor-ebimage=4.40.0 bioconductor-cardinal=3.0.1 bioconductor-biocparallel=1.32.5 r-rtsne=0.16
+```
+
+
+Step 4: Install MSIREG package
+------------------------------------------------------------------------
+Open R by running the following command in the terminal from within the Conda environment:
+R
+
+Once R is open, install the MSIREG package by running the following command within R:
+```{r, eval=FALSE}
+devtools::install_github("sslakkimsetty/msireg")
+```
+
+Step 5: Install RStudio server
+------------------------------------------------------------------------
+To run RStudio in the browser, first download and install RStudio server from https://posit.co/download/rstudio-server/. Follow the instructions provided on the website for Debian/Ubuntu to complete the installation.
+
+Run the following commands in the Ubuntu terminal:
+```{r, engine = 'bash', eval = FALSE}
+sudo apt-get install gdebi-core
+wget https://download2.rstudio.org/server/jammy/amd64/rstudio-server-2023.03.0-386-amd64.deb
+sudo gdebi rstudio-server-2023.03.0-386-amd64.deb
+```
+
+Step 6: Start RStudio server within the activated conda environment
+------------------------------------------------------------------------
+Activate the Conda environment by running the following command in the Ubuntu terminal:
+
+```{r, engine = 'bash', eval = FALSE}
+sudo /usr/lib/rstudio-server/bin/rserver \
+--server-daemonize=0 \
+--www-port 8787 \
+--rsession-which-r=$(which R) \
+--rsession-ld-library-path=$CONDA_PREFIX/lib
+```
+
+Step 7: Access RStudio server
+------------------------------------------------------------------------
+Access RStudio server by opening your web browser and navigating to http://localhost:8787
+
+Log in to RStudio with your Ubuntu credentials.
+
+
+# Session info 
+```{r session-info} 
+sessionInfo()
+```
+
