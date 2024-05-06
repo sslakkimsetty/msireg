@@ -1,0 +1,598 @@
+---
+title: "Coregistration of MSI and H&E images of the Farmhouse painting dataset"
+author: "Sai Srikanth Lakkimsetty"
+date: "Apr, 2024"
+output:
+    BiocStyle::html_document:
+    toc: true 
+vignette: >
+  %\VignetteIndexEntry{Coregistration of MSI and H&E images of the Farmhouse painting}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+
+#### **This dataset is notable because it is non-biological. The farmhouse painting is affixed onto a glass slide and imaged. This dataset is included for its very low spatial resolution and having non-elastic deformations. It is also notable that the pig fetus tissue was ionized with a desorption electrospray ionization (DESI).** 
+
+
+# Setup 
+
+Load necessary packages. 
+
+```{r setup, echo=FALSE, message=FALSE, warning=FALSE}
+# A flag to manage chunk re-runs while knitting ... 
+# Set SHARING to FALSE if you are re-knitting the code and variables are already 
+# in the environment. Manage individual code chunk evaluation with "eval" option. 
+
+SHARING <- FALSE 
+ECHO <- TRUE   
+
+if (SHARING) {
+    library("msireg") 
+} else {
+    library("devtools")
+    load_all()
+} 
+
+library("ggplot2") 
+library("scales")
+RNGkind("L'Ecuyer-CMRG") 
+
+setCardinalBPPARAM(MulticoreParam(progressbar=TRUE)) 
+setCardinalVerbose(TRUE)
+```
+
+```{r style, echo=FALSE, results="asis", eval=TRUE}
+BiocStyle::markdown()
+```
+
+
+# Introduction 
+
+In this vignette, we illustrate the coregistration between mass spectrometry image and H&E images of the farmhouse painting which is affixed onto a glass slide. 
+
+The MSI is acquired with a DESI ionization source using a LTQ linear ion trap mass spectrometer (Thermo Fannigan). The mass spectra are acquired between 100 and 1000 m/z for a total of 10,800 features. 
+
+There are four key inputs to the coregistration workflow. These are the fixed image, the moving image, MSI region of interest (ROI) and optical image ROI. We consider the MS image as the *moving image* and the optical image as the *fixed image*. That means, the MS image is transformed to align with the microscopic (H&E) image. The ROIs provide the coregistration method with information on where the tissue is present on the slide. It is essential that the coregistration method knows where the background is present to exclude it from coregistration process. Not only does this improve the computational efficiency of the method, it also results in a better coregistration performance.
+
+Similarly there are four key steps to coregistering MS and optical images. We shall discuss more about the steps as we perform them. 
+
+* Pre-processing MS and optical images 
+* ROI selection of the images
+* Pre-alignment 
+* Coregistration 
+
+We load the MS and optical images into R as below. (We also set directories for saving the environment and the transformation files.) 
+
+DATAPATH, and CURRPATH are directories to indicate where the data is stored. ENVSAVEPATH is the directory to save the global environment after the coregistration is completed so we can avoid re-running the coregistration method if we want to visit the results again later. TFSAVEPATH is the directory to store the transformation R object (R object responsible for how the alignment is done) separately. This is due to the fact how SimpleITK stores data in R objects. 
+
+However, if you do not want to save the R environment or the transformation objects, skip the below two chunks and directly read MSI and H&E images below. 
+
+
+```{r directories, eval=SHARING} 
+DATAPATH <- "/Users/sai/Documents/00-NEU/2-Ind-Study/9-data"
+CURRPATH <- "5-farmhouse"
+ENVSAVEPATH <- "/Users/sai/Library/Mobile Documents/com~apple~CloudDocs/1-saved-envs/vignettes/msireg-vignettes"
+TFSAVEPATH <- "/Users/sai/Documents/01-NU/phd/msireg/data/saved-transforms/msireg-vignettes" 
+
+mse_data <- "farmhouse.rdata" 
+opt_filename <- "farmhouse.png"  
+env_filename <- "6-farmhouse.RData"
+tf_filename <- "6-farmhouse.hdf5" 
+``` 
+
+Below are some utility functions for allowing us to quickly save and load R environment (when performing coregistration and any downstream analyses in multiple R sessions), and IO for transformation files. Skip this step if you do not want to save the R environment or the transformation objects after running the coregistration method. 
+
+```{r data-logistics, eval=SHARING, echo=ECHO} 
+saveImage <- function(filename) {
+    save.image(file.path(ENVSAVEPATH, filename))
+} 
+
+
+loadImage <- function(filename) {
+    load(file.path(ENVSAVEPATH, filename), envir=.GlobalEnv)
+} 
+
+
+writeTF <- function(coregister_object, filename) {
+    WriteTransform(coregister_object$reg$TF, 
+        file.path(TFSAVEPATH, filename)) 
+} 
+
+
+readTF <- function(coregister_object, filename) {
+    coregister_object$reg$TF <- ReadTransform(
+        file.path(TFSAVEPATH, filename)
+    ) 
+    coregister_object
+}
+```
+
+
+Finally, we load into R the MSI and histology images. Change directory MSI and H&E images 
+
+```{r data-load, eval=SHARING} 
+load(file.path(DATAPATH, CURRPATH, mse_data)) 
+mse_peaks <- as(farmhouse, "MSImagingExperiment") 
+
+opt <- readImage(file.path(DATAPATH, CURRPATH, 
+    opt_filename)) 
+opt |> display("raster") 
+
+saveImage(env_filename)
+```
+
+
+# MS image pre-processing 
+
+The MSI data we imported is already preprocessed. The peak picked and filtered data has 187 features. So, no further processing is needed. 
+
+
+# Identifying regions-of-interest (ROIs) 
+
+In this section, we refer to the tissue outline which demarcates the boundary between the tissue areas and background as a region of interest (ROI). ROI (in the context of coregistration) implies the whole tissue and not just the "interesting" regions within the tissue that we may be interested in. 
+
+First, we make a list of the processed data attributes: X and Y spatial resolution of processed MSI data; number of features and pixels of processed MSI data; and X and Y spatial resolution of optical image. 
+
+```{r mse-params, eval=SHARING, echo=ECHO} 
+mse_attrs <- list(
+    nX = dims(mse_peaks)[1], nY = dims(mse_peaks)[2],
+    nF = dim(mse_peaks)[1], nP = dim(mse_peaks)[2],
+    nXo = dim(opt)[1], nYo = dim(opt)[2]
+) 
+```
+
+
+## MSI tissue outline 
+
+Tissue outline is a binary mask i.e., a TRUE or FALSE flag for each pixel indicating whether that pixel is part of the tissue (TRUE) or part of the backgroud (FALSE). 
+
+MSI's tissue outline can be computed in two ways. Often, if the tissue is imaged (likely in MALDI) where only the tissue areas are ionized and imaged, then the function `constructROIFromMSImage()` will automatically generate a mask separating background from the tissue. 
+
+However, if the MSI includes background as well (for example, DESI), then `msireg` provides an in-built utility to generate the tissue ouline for MSI tissue. We select the tissue outline using the function `multiSelectROI` which is built on `Cardinal`'s `selectROI` method. `multiSelectROI` can select multiple disjoint tissue regions in one go. The method `multiSelectROI` needs an `mz` value to display a raster on which the tissue outline is selected. 
+
+If you already have a `mz` value that properly demarcates tissue and background, skip the next two code chunks. Otherwise, we build a quick spatial shrunken centroids model (refer `?spatialShrunkenCentroids` for details) to come up with a list of `mz` values that are suitable for this task. The `mz` list is derived from the `ssc` model's top features. This is a reliable way to select one `mz` value for tissue outline selection. Please note that this is a computational heavy step and may take a few minutes; it may be easier to select a `mz` value manually. 
+
+```{r viz-ssc, eval=SHARING, echo=ECHO} 
+set.seed(2)
+ssc <- spatialShrunkenCentroids(mse_peaks, r=c(1), s=c(24), k=c(15), 
+    method="gaussian", BPPARAM=MulticoreParam()) 
+topf <- topFeatures(ssc, n=10, model=list(s=24))$mz 
+```
+
+Now we select a `mz` value from the top features `topf`. `mz =` 323.25 is a good ion image to draw MSI issue outline. 
+
+```{r viz-ssc-select-mz, eval=SHARING, echo=ECHO}
+image(mse_peaks, mz=t323.25) 
+message("Appropriate m/z value for tissue outline selection: ", 
+    round(323.25, 3)) 
+```
+
+
+To select the tissue outline using a mouse on the plotting pane, run the below command directly from console. We specify the `mz` value we selected above. In fact, `multiSelectROI` can be used on a variety of plotting types including superposed image plots. 
+
+```{r msi-roi-2, eval=SHARING, echo=ECHO} 
+# RUN DIRECTLY FROM CONSOLE, SESSION WILL CRASH OTHERWISE 
+# mse_roi <- multiSelectROI(mse_peaks, mz=323.25) 
+``` 
+
+
+## Histology image tissue outline 
+
+We use `multiDrawROI` to select the tissue outline for optical images. The usage is identical to that of `multiSelectROI` (without the need for a `mz` value). It is to be executed directly from console to prevent R session from crashing. The histology images can have high spatial resolution leading to high tissue outline computational times. 
+
+```{r opt-roi, eval=SHARING, echo=ECHO} 
+# RUN DIRECTLY FROM CONSOLE, SESSION WILL CRASH OTHERWISE 
+# opt_roi <- multiDrawROI(opt)
+```
+
+
+# Pre-alignment of images
+
+So far, we have performed pre-processing and tissue outline selection of the images. Before doing the coregistration step, we further process the images to ensure the images are overlapping. Often, the tissues on the imaged slide are at different (non-overlapping) positions. That means, the burden of first bringing the images together falls on the coregistration method, which could affect its performance. To alleviate this problem, we ensure overlap of two images by cropping and padding. We crop and/or pad histology image so that it overlaps with the tissue of the MS image. To clarify, we are not coregistering the images in this step (no transformations of the grid) but we do keep track of the the cropping and padding operations to ensure reproducibility. 
+
+```{r opt-mask-img-crop, eval=SHARING, echo=ECHO} 
+OUT <- cropToEdgesAndPadZeros(ref_mask=mse_roi, 
+    target_mask=opt_roi, target_img=opt) 
+opt <- OUT$img 
+opt_roi <- OUT$mask 
+``` 
+
+
+# Coregistration 
+
+Here, we coregister the MS image (pre-processed `mse_peaks`) and the optical image (`opt`) using the `coregister()` function. A scaling factor, `spatial_scale`, allows the method to coregister the images at a higher / lower resolution (with respect to the `mse`'s spatial dimensions). This is to overcome the imaging resolution disparity between MSI and optical images. The method returns a list. The individual coregistration components can be accessed using the `$`. 
+
+```{r coreg, eval=SHARING}
+OUT <- coregister(mse=mse_peaks, opt=opt, mse_roi=mse_roi, 
+    opt_roi=opt_roi, spatial_scale=4, 
+    BPPARAM=MulticoreParam(), verbose=TRUE) 
+```
+
+
+Next, we save the environment and the transformation parameters to file. This way, we can work with the coregistration outputs later in another session without having to run `coregister()` again. This is step is recommended because `R` / `SimpleITK` may overwrite the `OUT` object in the following steps. 
+
+```{r, coreg-write-to-file, eval=SHARING, echo=ECHO} 
+saveImage(env_filename)
+writeTF(OUT, tf_filename)
+
+# loadImage(env_filename)
+# OUT <- readTF(OUT, tf_filename)
+``` 
+
+Because of the same reasons for writing `OUT` object to file, let's go ahead and duplicate the object as well for extra safety. This duplicates the whole object and not just the reference pointer to the same object in memory. 
+
+```{r, duplicate-out, eval=SHARING, echo=ECHO} 
+out <- rlang::duplicate(OUT)
+```
+
+
+# Visualization of the results 
+
+We visualize the results of the coregistration. Before visualization, we need to generate the transformed moving image that aligns correctly with the fixed image. We use the method `Resample()` from `SimpleITK` to obtain the transformed moving image. The plot below shows the overlays of the MS (moving) image and the optical (fixed) images' overlays before and after coregistration. 
+
+A few details we use throughout the rest of the vignette: 
+
+* Visualizing `SimpleITK::image()` objects is buggy in R, so we convert them to `EBImage::Image()` objects and visualize them. 
+* `out$fixed` is the fixed image, `out$moving` is the moving image, `out$movingx` is the transformed moving image. 
+
+```{r viz-coreg-prep, eval=TRUE} 
+out$fixed <- SimpleITK::as.image(out$opt, isVector=FALSE)
+out$moving <- SimpleITK::as.image(out$msimg, isVector=FALSE)
+
+# Generate the transformed and aligned moving image 
+out$movingx <- Resample(out$moving, out$reg$TF)
+``` 
+
+
+```{r viz-coreg, fig.show="hold", eval=TRUE, echo=ECHO} 
+alpha <- 0.45 
+
+# Convert SimpleITK's image() objects into EBimage's Image() objects for easier and flexible plotting 
+.fixed <- out$fixed |> as.array() |> Image()
+.moving <- out$moving |> as.array() |> Image()
+.movingx <- out$movingx |> as.array() |> Image()
+
+# Overlay fixed and moving images 
+ol1 <- (.fixed * alpha + .moving * (1-alpha)) 
+
+# Overlay fixed and transformed moving images 
+ol2 <- (.fixed * alpha + .movingx * (1-alpha))
+
+# Plot fixed, moving, and overlays before and after coregistration 
+def.par <- par(no.readonly=TRUE)
+height <- 11
+width <- height * (dim(.fixed)[1] / dim(.fixed)[2])
+
+titles <- c("Optical image", "Mass spec. image",
+            "Overlay before coregistration", "Overlay after coregistration")
+
+par(mar=c(0.25, 0.25, 0.75, 0.25))
+pl <- layout(mat=matrix(c(1:4), ncol=2, byrow=TRUE),
+             heights=rep(height/2, 2), widths=rep(width/2, 2),
+             respect=TRUE)
+
+. <- sapply(c(1:4), function(x) {
+    plot.new()
+    rasterImage(list(.fixed, .moving, ol1, ol2)[[x]],
+                xleft=0, xright=1, ytop=0, ybottom=1,
+                interpolate=FALSE) 
+    title(titles[x])
+}) 
+par(def.par) 
+```
+
+
+As we can see, the representative MS image shows heterogeneity that is comparable to the optical image. The bottom row shows overlays of the optical and MS image before and after coregistration. 
+
+Next, we visualize the transformation parameters. By deforming a square grid, we can visualize how the coregistration method "moved" the moving image so it is coregistered or aligned with the fixed image. This step allows us to identify anomalies, failed coregistrations, or folding. 
+
+```{r grid-tr, eval=TRUE, echo=ECHO} 
+overlay <- overlayGridOnImage(out$msimg, scale_factor=1)$overlay |> as.image()
+grid <- overlayGridOnImage(out$msimg, scale_factor=1)$grid |> as.image()
+
+out$overlayx <- Resample(overlay, out$reg$TF) |> as.array() |> Image()
+out$gridx <- Resample(grid, out$reg$TF) |> as.array() |> Image()
+``` 
+
+
+```{r coreg-grid-overlay-viz, fig.show="hold", eval=TRUE, echo=ECHO} 
+height <- 7 
+width <- (height * 2) * (dim(out$gridx)[1] / dim(out$gridx)[2])
+
+pl <- layout(mat=matrix(c(1:2), ncol=2, byrow=TRUE),
+             heights=height, widths=rep(width/2, 2),
+             respect=TRUE) 
+titles <- c("Grid warping", "Overlay with grid warping") 
+par(mar=c(0.25, 0.25, 0.75, 0.25))
+. <- sapply(c(1:2), function(x) {
+    plot.new()
+    rasterImage(list(out$gridx, out$overlayx)[[x]],
+                xleft=0, xright=1, ytop=0, ybottom=1,
+                interpolate=TRUE) 
+    title(titles[x])
+})
+par(def.par) 
+``` 
+
+
+In the above plot, the left plot shows how the deformation of the grid shows how underlying coordinate system has been transformed (warped) by the coregistration method so the moving image tissue aligns with the fixed image. The expansions and contractions correspond to those in the transformed moving image as shown in the right plot. If the grid plot has aliasing issues, plot the grid separately using the below chunk utilizing the full width of the page. 
+
+
+```{r grid-tr-viz-only, fig.show="hide", eval=TRUE, echo=ECHO} 
+height <- 8 
+width <- (height) * (dim(out$gridx)[1] / dim(out$gridx)[2])
+
+pl <- layout(mat=matrix(c(1), ncol=1, byrow=TRUE),
+             heights=height, widths=width,
+             respect=TRUE) 
+titles <- c("Grid warping") 
+par(mar=c(0.25, 0.25, 0.75, 0.25))
+plot.new() 
+rasterImage(out$gridx, xleft=0, xright=1, ytop=0, ybottom=1,
+                interpolate=TRUE) 
+title(titles[1])
+par(def.par) 
+```
+
+
+# Performance metrics 
+
+There is no **single** metric that evaluates all aspects of the coregistration. However, a set of metrics are included in the package and tuned to answer specific aspects. Some of them are below. 
+
+* Sørensen-Dice coef. - Dice 
+* Normalized gradient field - Modersitzki & Haber 
+* Mutual information (MI) - Viola & Wells 
+* Normalized MI - Studholme et. al. 
+* Dense vector field jacobian 
+* Gradient field cosine distance 
+
+## Sørensen-Dice Similarity Coefficient^[[1](https://support.brainvoyager.com/images/documents/Available_Tools/Available_Scripts/python/ImageRegistrationEvaluationViaDiceCoefficientInBV_v02.pdf)]^ 
+
+The Dice coefficient, `D` is essentially the percentage of area that is overlapping between the optical and MS image. 
+
+$A$, $B$ are the images represented on the coordinate grid. $\cap$ represents 
+the overlapped area between two images. 
+
+$$ 
+D = \frac{2 \mid A \cap B \mid}{\mid A \mid + \mid B \mid} 
+$$
+
+Dice coefficient is computed from MSI and OPT tissue outlines or masks. The range of Dice coefficient varies between `0` and `1`. `0` means complete misalignment and `1` means perfect alignment. This metric evaluates the degree of overlap between the tissue outlines before and after coregistration. 
+
+```{r metric-dice, eval=TRUE} 
+spatial_scale <- 4 
+DIM <- dim(out$MSIMG)[1:2] * spatial_scale
+D_prereg <- diceCoefFromMasks(mse_roi, opt_roi) 
+mse_roi_ss <- resizeAndPadImageToMatchDims(mse_roi, DIM) 
+opt_roi_ss <- resizeAndPadImageToMatchDims(opt_roi, DIM) 
+mse_roi_ss_x <- applyTransformOnMask(mse_roi_ss, out$reg$TF) 
+D_postreg <- diceCoefFromMasks(mse_roi_ss_x, opt_roi_ss) 
+```
+
+
+Dice coefficient before and after coregistration is `r round(D_prereg, 3)` and `r round(D_postreg, 3)` respectively. We can also overlay the tissue outlines and visualize the alignment as below. 
+
+```{r metric-dice-viz, fig.show="hold", eval=TRUE, echo=ECHO} 
+ol3 <- t(opt_roi_ss * 0.5 + mse_roi_ss * 0.5)
+ol4 <- t(opt_roi_ss * 0.5 + mse_roi_ss_x * 0.5)
+
+height <- 7
+width <- (height * 2) * (dim(ol3)[2] / dim(ol3)[1])
+
+pl <- layout(mat=matrix(c(1:2), ncol=2, byrow=TRUE),
+             heights=height, widths=rep(width/2, 2),
+             respect=TRUE) 
+titles <- c("Masks overlap before coreg", "Masks overlap after coreg") 
+par(mar=c(0.25, 0.25, 0.75, 0.25))
+. <- sapply(c(1:2), function(x) {
+    plot.new()
+    rasterImage(list(ol3, ol4)[[x]],
+                xleft=0, xright=1, ytop=0, ybottom=1,
+                interpolate=FALSE) 
+    title(titles[x])
+})
+par(def.par)
+```
+
+The left plot shows the overlay of optical and MS image tissue outlines prior to and post coregistration. The color white and black means that the tissue outline areas are aligned and the color gray implies the areas are not aligned. It is clear that the right plot has more alignment (less gray area) than the left plot. From this plot, we check that the overall gray area is reduced (or ideall zero). 
+
+
+## Normalized cross correlation 
+
+Normalized cross correlation, like Dice coefficient, also evaluates the global coregistration quality. It operates on images' intensity while Dice coefficient operates on the tissue outlines of the two images. Normalized cross correlation is a similarity metric that measure correlation between pixel intensities. It ranges between `0` and `1`. The higher the metric, the higher the alignment is. $A$, $B$ are the image intensities represented on the coordinate grid, and $i$, $j$ are indices pointing to the pixels of the image. 
+
+$$ 
+NCC = \frac{\sum_{i=1}^{M}\sum_{j=1}^{N} (A(i,j) - \bar{A})(B(i,j) - \bar{B})}{\sqrt{\sum_{i=1}^{M}\sum_{j=1}^{N}(A(i,j) - \bar{A})^2 \sum_{i=1}^{M}\sum_{j=1}^{N}(B(i,j) - \bar{B})^2}}
+$$
+
+
+```{r ncc, eval=TRUE} 
+ncc_prereg <- normalizedCrossCorr(.fixed, .moving) 
+ncc_postreg <- normalizedCrossCorr(.fixed, .movingx) 
+```
+
+The `ncc` values before and after coregistration are `r round(ncc_prereg, 3)` and `r round(ncc_postreg)` respectively. 
+
+
+## Mutual information 
+
+While mutual information (MI) is a very effective at evaluting the similarity between two images that have different intensity ranges and scales, we are using it for optimizing the coregistration routine. So, evaluating the coregistration performance on this metric is not recommended. MI is also a global metric. 
+
+However, here is a way to evaluate MI on the images before and after registration. 
+
+```{r mi-eval, eval=SHARING, echo=ECHO} 
+# Metric before coregistration 
+mi_before <- out$reg$reg$MetricEvaluate(out$fixed, out$moving) 
+
+mi_after <- out$reg$reg$MetricEvaluate(out$fixed, out$movingx) 
+
+print(paste0("MI metric before registration: ", round(mi_before, 4))) 
+print(paste0("MI metric after registration: ", round(mi_after, 4))) 
+```
+
+The metric improved after registration and that is expected because we use the same metric for performing the coregistration. 
+
+
+## Dense vector field jacobian determinant 
+
+This metric evaluates the local coregistration quality by applying a jacobian determinant on the dense vector field transformation. Dense vector field is the evaluation of every pixel location's `x` and `y` displacements. Specifically, we want to look at the pixel folding which corresponds to negative jacobian determinant values. Folding occurs when neighboring pixels switch positions after transformation. So, when a pixel that is to be left of a neighboring pixel has shifted to the right of that neighboring pixel after transformation. 
+
+Imagine a canvas where you want get the right edge of the canvas to the left side of the left edge. The only way to do this is to fold the right edge over the left edge. This is why we check the jacobian determinant for "folding" in the transformed image. 
+
+Values 
+
+* = 1 imply no area (or volume) change 
+* (> 1) imply increased area or expansion 
+* (1, 0) imply reduced area or shrinkage 
+* < 0 imply folding <- this is bad 
+
+First, we plot a histogram of the jacobian determinant to visualize the distribution of the values. We can see, almost all values are centered around 1, which means the transformations are elastic and very superficial. The red and blue dotted lines show transformations where area has shrunk or expanded by 2 times respectively. 
+
+```{r jac-det-hist, fig.show="hold", eval=TRUE, echo=ECHO} 
+jac <- jacobianDeterminantFromTransform(out$reg$TF, ref_img=out$moving) 
+jac_hist <- data.frame(jac_hist=as.vector(jac$jacobian_det)) 
+jac_hist$ind <- 1:nrow(jac_hist) 
+
+jac_hist |> 
+    ggplot(mapping=aes(x=jac_hist)) + 
+    geom_histogram(bins=200, color="black", fill="white") + 
+    geom_vline(xintercept=1, color="black", linetype="dotted") + 
+    geom_vline(xintercept=0.5, color="red", linetype="dotted") + 
+    geom_vline(xintercept=2, color="blue", linetype="dotted") + 
+    labs(x="jacobian determinants", y="count", 
+         title="Jacobian determinant values") + 
+    theme_classic()
+```
+The range of the determinant of the Jacobian is `r range(jac$jacobian_det)`. The number of pixel locations where folding has occurred is `r sum(jac$jacobian_det <= 0)`.
+
+Next, we plot the jacobian determinants as an image. This will provide us with the spatial distribution of transformations similar to that of the transformed grid earlier. In this plot, we also see the strength of the transformation. The darker (more intensity) the region is, the more warped it is. 
+
+```{r jacobian-viz-gray, fig.show="hold", eval=TRUE, echo=ECHO} 
+.jacdet <- jac$jacobian_det 
+.jacdet[.jacdet < 0] <- 0 
+.jacdet[.jacdet > 1] <- 1 
+
+def.par <- par(no.readonly=TRUE)
+height <- 7
+width <- height * (dim(.jacdet)[1] / dim(.jacdet)[2])
+
+titles <- c("Jacobian determinants")
+
+par(mar=c(0.25, 0.25, 0.75, 0.25))
+pl <- layout(mat=matrix(c(1:1), ncol=1, byrow=TRUE),
+             heights=height, widths=width,
+             respect=TRUE)
+
+plot.new()
+rasterImage(t(.jacdet), 
+            xleft=0, xright=1, ytop=0, ybottom=1, 
+            interpolate=FALSE) 
+title(titles[1]) 
+par(def.par)
+```
+
+
+The gray regions show where the most warping has occurred. We can further analyze the warping by plotting the colors that correspond to whether the region has expanded or contracted. 
+
+```{r jacobian-viz-ggplot, fig.show="hold", eval=TRUE, echo=ECHO} 
+jacdet <- jac$jacobian_det 
+jacdet[jacdet <= 0] <- 0 
+d <- dim(jacdet)
+
+# Create a mesh with x and y as coordinates of the plot 
+# and z as the jacdet intensity 
+jacdet_mesh <- expand.grid(x=c(1:d[1]), y=c(1:d[2])) 
+jacdet_mesh$ints <- c(flip(jacdet)) 
+
+jacdet_mesh |> 
+    ggplot(mapping=aes(x=x, y=y)) + 
+    geom_tile(aes(fill=ints)) + 
+    scale_fill_gradientn("determinants", colors=c("red", "white", "blue"), 
+                         values=scales::rescale(c(min(jacdet), 1, max(jacdet)))) + 
+    labs(title="Spatial warping strength") + 
+    theme_void() + 
+    theme(panel.border=element_rect(color="black", fill=NA, linewidth=1), 
+          legend.key.width=unit(0.75, "lines")) 
+    
+```
+
+We can visualize the regions warped as well as the strength of the warping as below. The red regions show regions of the tissue shrinked and blue areas show expansion. It is very easy to correlate between the warped grid, gray scale warped image and the color image.
+
+
+## Gradient field cosine distance 
+
+The final performance metric is the gradient field cosine distance visualized spatially. Put simply, the images are a measure of cosine distance between the following image gradient pairs. 
+
+* fixed and moving image pair 
+* fixed and transformed moving image pair 
+
+```{r gradient-field-cosine-dist, eval=TRUE, echo=ECHO} 
+img1 <- .fixed
+img2 <- .moving
+img2x <- .movingx
+
+grads1 <- matrixGradients(imageData(img1))
+grads2 <- matrixGradients(imageData(img2))
+grads2x <- matrixGradients(imageData(img2x))
+
+.grads1 <- normalizeGradients(grads1)
+.grads2 <- normalizeGradients(grads2)
+.grads2x <- normalizeGradients(grads2x)
+
+D <- dim(img1)
+
+.grads <- array(c(.grads1, .grads2), dim=c(D, 4))
+cos_dist <- apply(.grads, c(1,2), function(x) {
+    if (identical(x[c(1:2)], x[c(3:4)])) return(1)
+
+    (sum( x[c(1:2)] * x[c(3:4)] ))
+}) |>
+    array(dim=dim(img1))
+
+
+.gradsx <- array(c(.grads1, .grads2x), dim=c(D, 4))
+cos_distx <- apply(.gradsx, c(1,2), function(x) {
+    if (identical(x[c(1:2)], x[c(3:4)])) return(1)
+
+    (sum( x[c(1:2)] * x[c(3:4)] ))
+}) |>
+    array(dim=dim(img1))
+```
+
+
+```{r gradient-cosine-dist-plots, fig.show="hold", eval=TRUE, echo=ECHO} 
+height <- 3.5
+width <- 7 * (dim(.fixed)[1] / dim(.fixed)[2])
+
+pl <- layout(mat=matrix(c(1:2), ncol=2, byrow=TRUE),
+             heights=height, widths=rep(width/2, 2),
+             respect=TRUE) 
+titles <- c("Cosine dist before reg", "Cosine distance after reg") 
+par(mar=c(0.25, 0.25, 0.75, 0.25))
+. <- sapply(c(1:2), function(x) {
+    plot.new()
+    rasterImage(list(t(1-cos_dist), t(1-cos_distx))[[x]],
+                xleft=0, xright=1, ytop=0, ybottom=1,
+                interpolate=FALSE) 
+    title(titles[x])
+})
+par(def.par)
+```
+
+Any systemic differences between these image pairs are picked up on by the metric. Informally, we look for any discernable morphology (like edges of heterogenous tissue regions). within both plots. Ideally, the plot on the right should not show any structures. However, if the right plot shows more structures in the right plot, it implies a bad coregistration. 
+
+
+# Computational details 
+
+[!TODO system.time() for benchmarking performance.]
+
+The coregistration workflow on this dataset is performed on Apple MacBook Pro with M2 Max. The physical memory size is 32GB and number of CPU nodes are 10. The preprocessing of MSI is parallelized on the 10 cores. The preprocessing of MSI took 86 minutes and the coregistration method `coregister()` took about 32 minutes. 
+
+
+# Session info
+
+```{r session-info} 
+sessionInfo()
+```
+
