@@ -412,7 +412,7 @@ ncc_prereg <- normalizedCrossCorr(.fixed, .moving)
 ncc_postreg <- normalizedCrossCorr(.fixed, .movingx) 
 ```
 
-The `ncc` values before and after coregistration are `r round(ncc_prereg, 3)` and `r round(ncc_postreg)` respectively. 
+The `ncc` values before and after coregistration are `r round(ncc_prereg, 3)` and `r round(ncc_postreg, 3)` respectively. 
 
 
 ## Mutual information 
@@ -421,7 +421,7 @@ While mutual information (MI) is a very effective at evaluting the similarity be
 
 However, here is a way to evaluate MI on the images before and after registration. 
 
-```{r mi-eval, eval=SHARING, echo=ECHO} 
+```{r mi-eval, eval=TRUE, echo=ECHO} 
 # Metric before coregistration 
 mi_before <- out$reg$reg$MetricEvaluate(out$fixed, out$moving) 
 
