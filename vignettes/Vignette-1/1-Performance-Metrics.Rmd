@@ -1,136 +1,113 @@
 ---
 title: "Quantitative metrics for evaluating registration performance"
 author: "Sai Srikanth Lakkimsetty"
-date: "July, 2022"
+date: "Apr, 2024"
 output:
     BiocStyle::html_document:
     toc: true 
 vignette: >
   %\VignetteIndexEntry{Quantitative metrics for evaluating registration performance}
   %\VignetteEngine{knitr::rmarkdown}
-  %\VignetteEncoding{UTF-8}
+  %\VignetteEncoding{UTF-8} 
+bibliography: 1-performance-metrics-references.bib
 ---
 
-```{r flags, echo=FALSE}
-# A flag to manage chunk re-runs while knitting 
-# (could also use cache option, but tricky) 
+
+# Setup 
+
+Load necessary packages. 
+
+```{r setup, echo=TRUE, message=FALSE, warning=FALSE}
+# A flag to manage chunk re-runs while knitting ... 
 # Set SHARING to FALSE if you are re-knitting the code and variables are already 
 # in the environment. Manage individual code chunk evaluation with "eval" option. 
-SHARING <- FALSE 
 
-# Save default parameters of graphics for resetting at the end of the session. 
-def.par <- par(no.readonly=TRUE)
+SHARING <- FALSE 
+ECHO <- TRUE   
+
+if (SHARING) {
+    library("msireg") 
+} else {
+    library("devtools")
+    load_all()
+} 
+
+library("ggplot2") 
+library("scales") 
+RNGkind("L'Ecuyer-CMRG") 
+
+setCardinalBPPARAM(MulticoreParam(progressbar=TRUE)) 
+setCardinalVerbose(TRUE)
 ```
 
-
-```{r style, echo=FALSE, results='asis', eval=TRUE}
+```{r style, echo=FALSE, results="asis", eval=TRUE}
 BiocStyle::markdown()
 ```
 
 
-```{r setup, echo=FALSE, message=FALSE}
-library("Cardinal")
-library("Rtsne")
-library("SimpleITK")
-library("EBImage")
-library("ggplot2")
-```
+# Introduction 
 
+This notebook documents the quantitative metrics provided with the [`MSIreg`](https://github.com/sslakkimsetty/msireg/) package. Implementing quantitative metrics is challenging. Landmark-free and unsupervised registration, by definition, does not need user's input for landmarks / annotations in the images. This also affects the way we evaluate the quality of the registration. If landmarks were present, we could 
+develop a method around the relative distances between landmarks ante- and post-registration. If regions were annotated, we could apply  Hausdorff distance to gather insights as to how well the method performed. However, these are not possible with **landmark-free and unsupervised** registration. 
 
-```{r metrics, echo=FALSE, eval=SHARING} 
-def.par <- par(no.readonly=TRUE)
-coregPlotOverlays <- function(plots, global_title=NA, aspect_ratio=(8/5), 
-                              height=10, quartz=FALSE, plot_config=c(1,2,3,4), 
-                              ncol=2) { 
-    titles <- c("Prior registration", "Post registration")
-    nrow <- length(plot_config) / ncol 
-    width <- aspect_ratio * height * (ncol / nrow)
-    
-    # Set output device and configure 
-    if (quartz) { 
-        quartz(title=global_title, width=width, height=height) 
-    } 
-    # else {
-    #     dev.new(title=global_title, width=width, height=height) 
-    # }
-    
-    par(mar=c(2, 2, 2, 2))
-    pl <- layout(mat=matrix(plot_config, ncol=ncol, byrow=TRUE), 
-                 heights=rep(height/nrow, nrow), 
-                 widths=rep(width/ncol, ncol), 
-                 respect=TRUE)
-    sapply(seq_along(plots), function(x) {
-        plot.new()
-        rasterImage(standardScaler(as.array(transpose(plots[[x]]))), xleft=0, 
-                    xright=1, ytop=0, ybottom=1, interpolate=FALSE)
-        title(titles[x])
-    }) 
-    par(def.par)
-} 
-```
-
-
-
-# Introduction
-
-This notebook focuses on quantitative metrics adopted in the literature for 
-assessing registration performance. The state of the art in clinical registration 
-is either 
-* use landmark based registration, or [!TODO - list software, Melanie]
-* use automated affine transformation based registration (e.g., Galaxy)
-
-It is notable that while automated and unsupervised registration techniques 
-exist in the wild (e.g., SimpleITK, voxelmorph ...), these are not yet fully 
-adopted for clinical applications outside of the labs that've developed these 
-methods [!TODO - get confirmation from Melanie]. 
-
-A primary reason (SPECULATING!!! [!TODO - needs Melanie's insights]) could be 
-attributed to the evaluation of the registration performance. (Another is the 
-technical expertise needed to understand the methods / software is higher!)
-
-Automated and unsupervised registration, by definition, does not need user's 
-input for landmarks / annotations in the images. This also affects the way 
-we evaluate the quality of the registration. If landmarks were present, we could 
-develop a method around the relative distances between landmarks ante- and post-registration. 
-If regions were annotated, we could apply  Hausdorff distance to gather insights 
-as to how well the method performed. 
-
-However, these are not possible with **automated and unsupervised** registration. 
 Furthermore, these questions remain, 
 
 * Did the registration perform satisfactorily globally? 
 * Were local deformations resolved? 
 * Did the registration induce any folds in the "canvas"? 
 
-There is no **single** metric that answers all of the above questions. However, 
-a set of metrics could be developed and tuned to answer specific questions. Some 
-of them are below. 
+There is no **single** metric that answers all of the above questions. However, a set of metrics could be developed and tuned to answer specific questions. To address the above problem, `MSIreg` implements quantitative metrics that only rely on tissue margin masks and on transformation parameters of the coregistration. `MSIreg` quantifies global accuracy of coregistration by applying dice coefficient to tissue masks, and by calculating normalized cross correlations of representative images' intensities. `MSIreg` quantifies  local (and elastic) accuracy of coregistration using the displacement field Jacobian determinant (@jacobian-sitk). At every tissue location, Jacobian determinant quantifies the extent to which the moving image expanded, contracted, or folded. A comprehensive list of all performance metrics included in `MSIreg` is listed below. 
 
-* Sørensen-Dice coef. - Dice 
-* Jaccard's similarity index 
-* Normalized gradient field - Modersitzki & Haber 
+* Sørensen-Dice coefficient - Dice 
+* Normalized cross correlation - Roche et. al. 
 * Mutual information - Viola & Wells 
+* Dense vector field jacobian (@jacobian-sitk) 
+* Normalized gradient field - Modersitzki & Haber 
+<!-- * Jaccard's similarity index 
 * Normalized MI - Studholme et. al. 
-* Correlation ratio - Roche et. al. 
-* Woods function - Woods et. al. 
-* Dense vector field jacobian 
+* Woods function - Woods et. al.  -->
 
-The essential idea is to start with various image similarity measuring metrics 
-and adapt them to apply for image registration evaluation. Dice coefficient, 
-Jaccard's index, mutual information, normalized MI, and the correlation 
-ratio provide insight into the global registration. Normalized gradient field 
-deals with the local registration quality. Dense vector field jacobian computes 
-and visualizes the artefacts induced by the registration process. 
+The essential idea is to start with various image similarity measuring metrics and adapt them to apply for image registration evaluation. Dice coefficient, Jaccard's index, mutual information, normalized MI, and the normalized cross correlation provide insight into the global registration. Normalized gradient field deals with the local registration quality. Dense vector field jacobian computes and visualizes the artefacts induced by the registration process. 
 
+
+```{r directories, eval=SHARING, echo=FALSE} 
+DATAPATH <- "/Users/sai/Library/Mobile Documents/com~apple~CloudDocs/9-data"
+CURRPATH <- "9-CRC"
+ENVSAVEPATH <- "/Users/sai/Library/Mobile Documents/com~apple~CloudDocs/1-saved-envs/vignettes/msireg-vignettes"
+TFSAVEPATH <- "/Users/sai/Documents/01-NU/phd/msireg/data/saved-transforms/msireg-vignettes" 
+
+env_filename <- "3-CRC-LM55.RData"
+tf_filename <- "3-CRC-LM55.hdf5"
+``` 
+
+```{r data-logistics, eval=SHARING, echo=ECHO} 
+loadImage <- function(filename) {
+    load(file.path(ENVSAVEPATH, filename), envir=.GlobalEnv)
+} 
+
+readTF <- function(coregister_object, filename) {
+    coregister_object$reg$TF <- ReadTransform(
+        file.path(TFSAVEPATH, filename)
+    ) 
+    coregister_object
+}
+```
+
+In this description document, we will use the coregistration results from Case Study 1 presented in the paper. The package vignette corresponding to this Case Study is **Vignette 3**. This dataset is notable for its visually notable global and local deformations between the mass spectrometry and H\&E images. Further, the H&E image is missing an adipose fat region (in the middle right region) that is present in MSI image. This acts as a test to measure if the coregistration method could adapt to the inconsitencies in tissues and their outlines. 
+
+
+```{r load-results, eval=SHARING} 
+mse_peaks <- readMSIData(file.path(DATAPATH, CURRPATH,
+    "processed-in-R/3-CRC-LM55-peaks.imzML"))
+loadImage(env_filename) 
+OUT <- readTF(OUT, tf_filename) 
+out <- rlang::duplicate(OUT) 
+```
 
 
 # Sørensen-Dice Similarity Coefficient^[[1](https://support.brainvoyager.com/images/documents/Available_Tools/Available_Scripts/python/ImageRegistrationEvaluationViaDiceCoefficientInBV_v02.pdf)]^ 
 
-The Dice coefficient, `D` is essentially the percentage of area that is overlapping 
-between the optical and MS image. 
-
-$A$, $B$ are the images represented on the coordinate grid. $\cap$ represents 
-the overlapped area between two images. 
+Dice coefficient is computed from MSI and OPT tissue outlines or masks. The Dice coefficient, `D` is essentially the percentage of area that is overlapping between the H&E and MS image. $A$, $B$ are the images represented on the coordinate grid. $\cap$ represents the overlapped area between two images. The range of Dice coefficient varies between `0` and `1`. `0` means complete misalignment and `1` means perfect alignment. This metric evaluates the degree of overlap between the tissue outlines before and after coregistration. 
 
 $$ 
 D = \frac{2 \mid A \cap B \mid}{\mid A \mid + \mid B \mid} 
@@ -144,87 +121,91 @@ Cons:
 
 * `D` is so simple that it only speaks to global (mis-) alignment. 
 * Very **wrong** registrations can actually have close-to-100% Dice coefficient. 
-For example consider the setting of affine transformation where the rotation is 
-90$^\circ$. The overall overlap would still be significantly high but the 
-registration task has failed. So, reporting just (or optimizing for) `D` is 
-not a good idea. 
+
+For example consider the setting of affine transformation where the rotation is 90$^\circ$. The overall overlap would still be significantly high but the registration task has failed. So, reporting just (or optimizing for) `D` is not a good idea. 
 
 
 ## Implementation details 
 
-Overlaps are computed using binary masks generated from, 
-    * Fiji (ImageJ) for optical images. 
-    * Cardinal for MS images. 
+Overlaps are computed using binary masks generated from `MSIreg` utilities or supplied as arguments to the `coregister()` method. MS image's binary mask is just resampled with transformation to generate transformed moving image's mask. 
 
-MS image's binary mask is just resampled with transformation to generate 
-transformed moving image's mask. 
-
-
-```{r dice, eval=SHARING} 
-diceCoef <- function(mask1, mask2) {
-    # Check for all masks to be of identical size. 
-    # [!TODO] check 
-    
-    composite <- ((mask1 + mask2) / 2) - 0.005 
-    composite <- ifelse(composite > 0.5, 1, 0) 
-    aINTb <- mean(composite) 
-    a <- mean(mask1) 
-    b <- mean(mask2) 
-    (2 * aINTb) / (a + b)
-}
+```{r dice, eval=TRUE, echo=FALSE, include=TRUE} 
+diceCoefFromMasks
 ```
-
-
-```{r dice-test, warning=FALSE, eval=SHARING, echo=FALSE} 
-DATAPATH <- "/Users/sai/Documents/00-NEU/2-Ind-Study/9-data"
-CURRPATH <- "2-hr2msi-mouse-urinary-bladder" 
-mask_name <- "2-mouse-bladder-mask.tif" 
-opt_mask <- generateMaskFromFile(file.path(DATAPATH, CURRPATH, "images", mask_name))
-mse_mask <- rasterizeROIFromCardinal(mse_peaks, tissue) 
-mse_mask_u <- resizeMask(ref=opt_mask, target=mse_mask) 
-
-mse_mask_itk <- SimpleITK::as.image(mse_mask, isVector=FALSE)
-.mse_mask_itk_tx <- Resample(mse_mask_itk, outTx2) 
-.mse_mask_itk_tx_arr <- as.array(.mse_mask_itk_tx)
-.mse_mask_itk_tx_arr <- resizeMask(.mse_mask_itk_tx_arr, opt_mask) 
-
-.nX <- dim(opt_mask)[1] 
-.nY <- dim(opt_mask)[2]
-```
-
 
 ## Results 
 
-```{r dice-results, eval=TRUE} 
-D_prior <- diceCoef(mse_mask_u, opt_mask) 
-D_post <- diceCoef(opt_mask, .mse_mask_itk_tx_arr) 
-
-overlay_prior <- as.Image(opt_mask) * 0.5 + as.Image(mse_mask_u) * 0.5 
-overlay_post <- as.Image(opt_mask) * 0.5 + as.Image(.mse_mask_itk_tx_arr) * 0.5 
-
-plots <- list(overlay_prior, overlay_post) 
-coregPlotOverlays(plots, 
-                  global_title="Mask overlays before and after registration", 
-                  quartz=FALSE, aspect_ratio=(.nX/.nY), plot_config=c(1,2)) 
-
-# Console only code 
-# coregPlotOverlays(plots, 
-#                   global_title="Mask overlays before and after registration", 
-#                   quartz=TRUE, aspect_ratio=(.nX/.nY), plot_config=c(1,2))
+```{r dice-eval, eval=TRUE} 
+spatial_scale <- 4 
+DIM <- dim(out$MSIMG)[1:2] * spatial_scale
+D_prereg <- diceCoefFromMasks(mse_roi, opt_roi) 
+mse_roi_ss <- resizeAndPadImageToMatchDims(mse_roi, DIM) 
+opt_roi_ss <- resizeAndPadImageToMatchDims(opt_roi, DIM) 
+mse_roi_ss_x <- applyTransformOnMask(mse_roi_ss, out$reg$TF) 
+D_postreg <- diceCoefFromMasks(mse_roi_ss_x, opt_roi_ss) 
 ```
 
-Dice coefficient before registration is `r round(D_prior, 3)`.  
-Dice coefficient after registration is `r round(D_post, 3)`.
 
+Dice coefficient before and after coregistration is `r round(D_prereg, 3)` and `r round(D_postreg, 3)` respectively. We can also overlay the tissue outlines and visualize the alignment as below. 
+
+```{r metric-dice-viz, fig.show="hold", eval=TRUE, echo=ECHO} 
+def.par <- par() 
+
+ol3 <- t(opt_roi_ss * 0.5 + mse_roi_ss * 0.5)
+ol4 <- t(opt_roi_ss * 0.5 + mse_roi_ss_x * 0.5)
+
+height <- 7
+width <- (height * 2) * (dim(ol3)[2] / dim(ol3)[1])
+
+pl <- layout(mat=matrix(c(1:2), ncol=2, byrow=TRUE),
+             heights=height, widths=rep(width/2, 2),
+             respect=TRUE) 
+titles <- c("Masks overlap before coreg", "Masks overlap after coreg") 
+par(mar=c(0.25, 0.25, 0.75, 0.25))
+. <- sapply(c(1:2), function(x) {
+    plot.new()
+    rasterImage(list(ol3, ol4)[[x]],
+                xleft=0, xright=1, ytop=0, ybottom=1,
+                interpolate=FALSE) 
+    title(titles[x])
+})
+par(def.par)
+```
+
+The left plot shows the overlay of optical and MS image tissue outlines prior to and post coregistration. The color white and black means that the tissue outline areas are aligned and the color gray implies the areas are not aligned. It is clear that the right plot has more alignment (less gray area) than the left plot. From this plot, we check that the overall gray area is reduced (or ideall zero). 
+
+
+# Normalized Cross Correlation (NCC) 
+
+Just your garden variety normalized cross correlation. $A$, $B$ are the image intensities represented on the coordinate grid, and $i$, $j$ are indices pointing to the pixels of the image. 
+
+$$ 
+NCC = \frac{\sum_{i=1}^{M}\sum_{j=1}^{N} (A(i,j) - \bar{A})(B(i,j) - \bar{B})}{\sqrt{\sum_{i=1}^{M}\sum_{j=1}^{N}(A(i,j) - \bar{A})^2 \sum_{i=1}^{M}\sum_{j=1}^{N}(B(i,j) - \bar{B})^2}}
+$$
+
+
+## Implementation details 
+
+NCC is computed using the representative (i.e., preprocessed and dimensionally reduced) images. The NCC method accepts two images as input. The comparison below would be for dimensionally reduced MSI image and preprocessed H&E image prior to, and after coregistration. 
+
+
+```{r ncc, eval=TRUE, echo=FALSE, include=TRUE}  
+normalizedCrossCorr
+```
+
+## Results 
+
+```{r ncc-eval, eval=TRUE} 
+ncc_prereg <- normalizedCrossCorr(.fixed, .moving) 
+ncc_postreg <- normalizedCrossCorr(.fixed, .movingx) 
+```
+
+The `NCC` values before and after coregistration are `r round(ncc_prereg, 3)` and `r round(ncc_postreg, 3)` respectively. 
 
 
 # Normalized Mutual Information (NMI) 
 
-Normalized mutual information is a modified version of MI. It solves the MI's 
-problem of unboundedness. 
-
-Below, $H$ is Shannon's entropy of an image and $A$, $B$ are the image intensities 
-represented on the coordinate grid.
+Normalized mutual information is a modified version of MI. It solves the MI's problem of unboundedness. Below, $H$ is Shannon's entropy of an image and $A$, $B$ are the image intensities represented on the coordinate grid.
 
 $$ 
 MI = H(A) + H(B) - H(A,B)
@@ -234,48 +215,39 @@ NMI = \frac{H(A) + H(B)}{H(A,B)}
 $$
 $$ 
 NMI = \frac{MI}{H(A,B)} + 1
-$$
-
-
-<!-- ## Implementation details 
-
-* Use exisiting implementation from R scripts (MS thesis) 
-* Use histograms (binning method) to estimate $H$. 
-
-
-## Results  -->
-
-
-
-# Normalized Cross Correlation (NCC) 
-
-Just your garden variety correlation. $A$, $B$ are the image intensities 
-represented on the coordinate grid, and $i$, $j$ are indices pointing to the 
-pixels of the image. 
-
 $$ 
-NCC = \frac{\sum_{i=1}^{M}\sum_{j=1}^{N} (A(i,j) - \bar{A})(B(i,j) - \bar{B})}{\sqrt{\sum_{i=1}^{M}\sum_{j=1}^{N}(A(i,j) - \bar{A})^2 \sum_{i=1}^{M}\sum_{j=1}^{N}(B(i,j) - \bar{B})^2}}
-$$
+
+While mutual information (MI) is a very effective at evaluting the similarity between two images that have different intensity ranges and scales, we are using it for optimizing the coregistration routine. So, evaluating the coregistration performance on this metric is not recommended. MI is also a global metric. 
 
 
-<!-- ## Implementation details 
+## Results 
 
+However, here is a way to evaluate MI on the images before and after registration. Here we just use the implementation from the `SimpleITK` package to compute the mutual information metric. 
 
-## Results  -->
+```{r mi-eval, eval=SHARING, echo=ECHO} 
+out$fixed <- SimpleITK::as.image(out$opt, isVector=FALSE)
+out$moving <- SimpleITK::as.image(out$msimg, isVector=FALSE)
 
+# Generate the transformed and aligned moving image 
+out$movingx <- Resample(out$moving, out$reg$TF)
+
+# Metric before coregistration 
+mi_before <- out$reg$reg$MetricEvaluate(out$fixed, out$moving) 
+
+# Metric after coregistration 
+mi_after <- out$reg$reg$MetricEvaluate(out$fixed, out$movingx) 
+```
+
+The `MI` values before and after coregistration are `r round(mi_before, 3)` and `r round(mi_after, 3)` respectively. The metric improved after registration and that is expected because we use the same metric for performing the coregistration. 
 
 
 # Displacement field jacobian determinant 
 
-The Jacobian, $J$'s determinant is used to measure the folding of a 
-transformation. ***Folding*** is an artefact of the registration process wherein 
-a location of the moving image is displaced beyond its neighbor _in that 
-direction_. In other words, the image is made to fold onto itself. Folding 
-is more common during more aggressive registration methods where smoothing or 
-regularization is avoided. 
+This metric evaluates the local coregistration quality by applying a jacobian determinant on the dense vector field transformation. Dense vector field is the evaluation of every pixel location's `x` and `y` displacements. The Jacobian, $J$'s determinant is used to measure the folding of a transformation. 
 
-The Jacobian is expressed as a matrix of partial derivatives of components 
-(displacements) with respect to the spatial coordinate system. 
+***Folding*** is an artifact of the registration process wherein a location of the moving image is displaced beyond its neighbor _in that direction_. In other words, the image is made to fold onto itself. Imagine a canvas where you want get the right edge of the canvas to the left side of the left edge. The only way to do this is to fold the right edge over the left edge. This is why we check the jacobian determinant for "folding" in the transformed image. 
+
+Specifically, we want to look at the pixel folding which corresponds to negative jacobian determinant values. Folding is more common during more aggressive registration methods where smoothing or regularization is avoided. The Jacobian is expressed as a matrix of partial derivatives of components (displacements) with respect to the spatial coordinate system. 
 
 $$ 
 det(J(A,B)) = 
@@ -283,26 +255,177 @@ det(J(A,B)) =
 \frac{\partial{i}}{\partial{x}} & \frac{\partial{j}}{\partial{x}} \\ 
 \frac{\partial{i}}{\partial{y}} & \frac{\partial{j}}{\partial{y}}
 \end{vmatrix}
-$$
+$$ 
+
+Values 
+
+* = 1 imply no area (or volume) change 
+* (> 1) imply increased area or expansion 
+* (1, 0) imply reduced area or shrinkage 
+* < 0 imply folding <- this is bad 
 
 
+## Implementation details 
+
+The method takes as input a transformation object from the `SimpleITK` package and a reference image. It then applies that transformation to the reference image, and compute individual pixel displacements. From here, each pixel's `x` and `y` gradients are computed. The resulting array of dimensions (`x`, `y`, `2`) is returned. 
+
+```{r jac, eval=TRUE, echo=FALSE, include=TRUE} 
+jacobianDeterminantFromTransform
+```
 
 
+## Results 
+
+First, we plot a histogram of the jacobian determinant to visualize the distribution of the values. We can see, almost all values are centered around 1, which means the transformations are elastic and very superficial. The red and blue dotted lines show transformations where area has shrunk or expanded by 2 times respectively. 
+
+```{r jac-det-hist, fig.show="hold", eval=TRUE, echo=ECHO} 
+jac <- jacobianDeterminantFromTransform(out$reg$TF, ref_img=out$moving) 
+jac_hist <- data.frame(jac_hist=as.vector(jac$jacobian_det)) 
+jac_hist$ind <- 1:nrow(jac_hist) 
+
+jac_hist |> 
+    ggplot(mapping=aes(x=jac_hist)) + 
+    geom_histogram(bins=200, color="black", fill="white") + 
+    geom_vline(xintercept=1, color="black", linetype="dotted") + 
+    geom_vline(xintercept=0.5, color="red", linetype="dotted") + 
+    geom_vline(xintercept=2, color="blue", linetype="dotted") + 
+    labs(x="jacobian determinants", y="count", 
+         title="Jacobian determinant values") + 
+    theme_classic()
+```
+The range of the determinant of the Jacobian is `r range(jac$jacobian_det)`. The number of pixel locations where folding has occurred is `r sum(jac$jacobian_det <= 0)`.
+
+Next, we plot the jacobian determinants as an image. This will provide us with the spatial distribution of transformations similar to that of the transformed grid earlier. In this plot, we also see the strength of the transformation. The darker (more intensity) the region is, the more warped it is. 
+
+```{r jacobian-viz-gray, fig.show="hold", eval=TRUE, echo=ECHO} 
+.jacdet <- jac$jacobian_det 
+.jacdet[.jacdet < 0] <- 0 
+.jacdet[.jacdet > 1] <- 1 
+
+def.par <- par(no.readonly=TRUE)
+height <- 7
+width <- height * (dim(.jacdet)[1] / dim(.jacdet)[2])
+
+titles <- c("Jacobian determinants")
+
+par(mar=c(0.25, 0.25, 0.75, 0.25))
+pl <- layout(mat=matrix(c(1:1), ncol=1, byrow=TRUE),
+             heights=height, widths=width,
+             respect=TRUE)
+
+plot.new()
+rasterImage(t(.jacdet), 
+            xleft=0, xright=1, ytop=0, ybottom=1, 
+            interpolate=FALSE) 
+title(titles[1]) 
+par(def.par)
+```
+
+The gray regions show where the most warping has occurred. We can further analyze the warping by plotting the colors that correspond to whether the region has expanded or contracted. 
+
+```{r jacobian-viz-ggplot, fig.show="hold", eval=TRUE, echo=ECHO} 
+jacdet <- jac$jacobian_det 
+jacdet[jacdet <= 0] <- 0 
+d <- dim(jacdet)
+
+# Create a mesh with x and y as coordinates of the plot 
+# and z as the jacdet intensity 
+jacdet_mesh <- expand.grid(x=c(1:d[1]), y=c(1:d[2])) 
+jacdet_mesh$ints <- c(flip(jacdet)) 
+
+jacdet_mesh |> 
+    ggplot(mapping=aes(x=x, y=y)) + 
+    geom_tile(aes(fill=ints)) + 
+    scale_fill_gradientn("determinants", colors=c("red", "white", "blue"), 
+                         values=scales::rescale(c(min(jacdet), 1, max(jacdet)))) + 
+    labs(title="Spatial warping strength") + 
+    theme_void() + 
+    theme(panel.border=element_rect(color="black", fill=NA, linewidth=1), 
+          legend.key.width=unit(0.75, "lines")) 
+```
+
+We can visualize the regions warped as well as the strength of the warping as below. The red regions show regions of the tissue shrinked and blue areas show expansion. It is very easy to correlate between the warped grid, gray scale warped image and the color image. 
 
 
+# Gradient field cosine distance 
+
+The final performance metric is the gradient field cosine distance visualized spatially. Put simply, the images are a measure of cosine distance between the following image gradient pairs. 
+
+* fixed and moving image pair 
+* fixed and transformed moving image pair 
+
+## Implementation details 
+
+The method takes as input two images, then compute gradients for each image, in both `x` and `y` directions. A distance metric (cosine distance) is then computed between the gradients. 
+
+```{r, gradient-field-cosine, eval=TRUE, echo=FALSE, include=TRUE} 
+matrixGradients  
+```
+
+## Results 
+
+```{r gradient-field-cosine-dist, eval=TRUE, echo=ECHO} 
+img1 <- .fixed
+img2 <- .moving
+img2x <- .movingx
+
+grads1 <- matrixGradients(imageData(img1))
+grads2 <- matrixGradients(imageData(img2))
+grads2x <- matrixGradients(imageData(img2x))
+
+.grads1 <- normalizeGradients(grads1)
+.grads2 <- normalizeGradients(grads2)
+.grads2x <- normalizeGradients(grads2x)
+
+D <- dim(img1)
+
+.grads <- array(c(.grads1, .grads2), dim=c(D, 4))
+cos_dist <- apply(.grads, c(1,2), function(x) {
+    if (identical(x[c(1:2)], x[c(3:4)])) return(1)
+
+    (sum( x[c(1:2)] * x[c(3:4)] ))
+}) |>
+    array(dim=dim(img1))
 
 
+.gradsx <- array(c(.grads1, .grads2x), dim=c(D, 4))
+cos_distx <- apply(.gradsx, c(1,2), function(x) {
+    if (identical(x[c(1:2)], x[c(3:4)])) return(1)
+
+    (sum( x[c(1:2)] * x[c(3:4)] ))
+}) |>
+    array(dim=dim(img1))
+```
 
 
+```{r gradient-cosine-dist-plots, fig.show="hold", eval=TRUE, echo=ECHO} 
+height <- 3.5
+width <- 7 * (dim(.fixed)[1] / dim(.fixed)[2])
+
+pl <- layout(mat=matrix(c(1:2), ncol=2, byrow=TRUE),
+             heights=height, widths=rep(width/2, 2),
+             respect=TRUE) 
+titles <- c("Cosine dist before reg", "Cosine distance after reg") 
+par(mar=c(0.25, 0.25, 0.75, 0.25))
+. <- sapply(c(1:2), function(x) {
+    plot.new()
+    rasterImage(list(t(1-cos_dist), t(1-cos_distx))[[x]],
+                xleft=0, xright=1, ytop=0, ybottom=1,
+                interpolate=FALSE) 
+    title(titles[x])
+})
+par(def.par)
+```
+
+Any systemic differences between these image pairs are picked up on by the metric. Informally, we look for any discernable morphology (like edges of heterogenous tissue regions). within both plots. Ideally, the plot on the right should not show any structures. However, if the right plot shows more structures in the right plot, it implies a bad coregistration. 
 
 
+# Session info
+
+```{r session-info} 
+sessionInfo()
+```
 
 
-
-
-
-
-
-
-
+# References 
 
