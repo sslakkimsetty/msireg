@@ -74,12 +74,13 @@ However, if you do not want to save the R environment or the transformation obje
 
 ```{r directories, eval=SHARING} 
 DATAPATH <- "/Users/sai/Documents/00-NEU/2-Ind-Study/9-data"
-CURRPATH <- "17-tonsil"
+CURRPATH <- "17-tonsil/48192"
 ENVSAVEPATH <- "/Users/sai/Library/Mobile Documents/com~apple~CloudDocs/1-saved-envs/vignettes/msireg-vignettes"
 TFSAVEPATH <- "/Users/sai/Documents/01-NU/phd/msireg/data/saved-transforms/msireg-vignettes" 
 
 mse_filename <- "17-tonsil.imzML" 
-opt_filename <- "17-tonsil.tiff" 
+opt_filename <- "48192_HeMat.png" 
+opt_roi_filename <- "opt-roi.txt"
 env_filename <- "8-tonsil.RData"
 tf_filename <- "8-tonsil.hdf5"
 ``` 
@@ -119,7 +120,20 @@ mse <- readMSIData(file.path(DATAPATH, CURRPATH,
     mse_filename)) 
 opt <- readImage(file.path(DATAPATH, CURRPATH, 
     opt_filename)) 
-opt |> display("raster")
+opt |> display("raster") 
+
+# # Read ROI mask of optical image from file
+# opt_roi <- read.table(file.path(DATAPATH, CURRPATH, opt_roi_filename), header=FALSE) |>
+#     as.matrix() |> t()
+# dimnames(opt_roi) <- NULL 
+
+load(file.path(DATAPATH, CURRPATH, "17-tonsil-48192-opt-roi.RData")) 
+
+# Apply ROI mask on optical image
+opt <- apply(imageData(opt), 3, function(x) t(x)*t(opt_roi), simplify=FALSE) |>
+    unlist() |> array(dim=c(dim(opt)[2], dim(opt)[1], dim(opt)[3])) |> Image(colormode=Color) 
+opt <- flop(opt) 
+opt_roi <- opt_roi |> t() |> flop() 
 ```
 
 
@@ -127,7 +141,7 @@ If we already have a preprocessed MS image, we can load it here.
 
 ```{r data-load-2, eval=SHARING, echo=ECHO} 
 mse_peaks <- readMSIData(file.path(DATAPATH, CURRPATH,
-    "processed-in-R/17-tonsil-peaks.imzML"))
+    "processed-in-R/17-48192-tonsil-peaks.imzML"))
 loadImage(env_filename) 
 ```
 
@@ -203,22 +217,19 @@ ssc <- spatialShrunkenCentroids(mse_peaks, r=c(2), s=c(24), k=c(4),
 topf <- topFeatures(ssc, n=10, model=list(s=24))$mz 
 ```
 
-[! TODO set mz value that is appropriate for this dataset.] 
-
-Now we select a `mz` value from the top features `topf`. `mz =` 300.0000 is a good ion image to draw MSI issue outline. 
+Now we select a `mz` value from the top features `topf`. `mz =` 825.2533 is a good ion image to draw MSI issue outline. 
 
 ```{r viz-ssc-select-mz, eval=SHARING, echo=ECHO}
-image(mse_peaks, mz=topf[9]) 
+image(mse_peaks, mz=topf[3]) 
 message("Appropriate m/z value for tissue outline selection: ", 
-    round(topf[5], 3)) 
+    round(topf[3], 3)) 
 ```
-
 
 To select the tissue outline using a mouse on the plotting pane, run the below command directly from console. We specify the `mz` value we selected above. In fact, `multiSelectROI` can be used on a variety of plotting types including superposed image plots. 
 
 ```{r msi-roi-2, eval=SHARING, echo=ECHO} 
 # RUN DIRECTLY FROM CONSOLE, SESSION WILL CRASH OTHERWISE 
-# mse_roi <- multiSelectROI(mse_peaks, mz=782.314) 
+# mse_roi <- multiSelectROI(mse_peaks, mz=825.2533) 
 ``` 
 
 
