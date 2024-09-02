@@ -57,7 +57,37 @@ remotes::install_github("sslakkimsetty/msireg")
 
 # Windows operating system 
 
-The Windows OS and the computer should support the usage of Windows Subsystem for Linux (WSL) for this procedure to succeed. 
+The Windows Subsystem for Linux (WSL) is a feature of Windows OS that lets developers access both Windows and Linux machines on the same computer. You must be running Windows 10 version 2004 and higher (Build 19041 and higher) or Windows 11 to use the installation method below. If you are on earlier versions please see the [manual install page](https://learn.microsoft.com/en-us/windows/wsl/install-manual). 
+
+An alternative WSL installation method is described in the [YouTube video](https://www.youtube.com/watch?v=av0UQy6g2FA). 
+
+## Install WSL 
+
+Open PowerShell or Windows Command Prompt in administrator mode by right-clicking and selecting "Run as admistrator" and execute the following command. 
+
+```{r, engine="bash", eval=FALSE} 
+wsl --install 
+```
+
+
+The default linux distribution installed is Ubuntu. This can be changed by using the `-d` flag. 
+
+```{r, engine="bash", eval=FALSE} 
+wsl --list --online # lists available distribution
+
+# Select an option from above list and install 
+
+wsl --install -d <Distribution Name> 
+```
+
+Once WSL and a linux distribution (OS) has been installed, you will need to create a user accound and password for it. Please see the best practices for setting up WSL [here](https://learn.microsoft.com/en-us/windows/wsl/setup/environment#set-up-your-linux-username-and-password). 
+
+Once WSL is set up, it is time to create a conda environment. 
+
+## Interoperabilty of Windows and Linux file systems 
+
+WSL does not require additional hardware and runs entirely on the Windows machine. More specifically, WSL is a feature of Microsoft Windows that allows for running Linux programs directly within Windows without the need for a virtual machine or extra hardware. WSL also shares the same filesystem as Windows so there would be no need for file transfers or extra networking equipment. (Users can write/read files on the Windows drives directly from within the Linux subsystem.) 
+For more information on working across Windows and Linux file systems and interoperability, please see [this link](https://learn.microsoft.com/en-us/windows/wsl/filesystems). 
 
 ## Create Conda environment
 
@@ -134,7 +164,7 @@ sudo /usr/lib/rstudio-server/bin/rserver \
 
 Access RStudio server by opening your web browser and navigating to `http://localhost:8787` 
 
-Log in to RStudio with your Ubuntu credentials.
+Log in to RStudio with your Ubuntu credentials. 
 
 
 # Session info 

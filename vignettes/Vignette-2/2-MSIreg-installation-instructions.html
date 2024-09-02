@@ -713,13 +713,15 @@ function toggle_visibility(id1) {
 <li><a href="#macos-and-linux-based-operating-systems" id="toc-macos-and-linux-based-operating-systems"><span class="toc-section-number">2</span> MacOS and Linux based operating systems</a></li>
 <li><a href="#windows-operating-system" id="toc-windows-operating-system"><span class="toc-section-number">3</span> Windows operating system</a>
 <ul>
-<li><a href="#create-conda-environment" id="toc-create-conda-environment"><span class="toc-section-number">3.1</span> Create Conda environment</a></li>
-<li><a href="#activate-conda-environment" id="toc-activate-conda-environment"><span class="toc-section-number">3.2</span> Activate Conda environment</a></li>
-<li><a href="#install-necessary-packages" id="toc-install-necessary-packages"><span class="toc-section-number">3.3</span> Install necessary packages</a></li>
-<li><a href="#install-msireg-package" id="toc-install-msireg-package"><span class="toc-section-number">3.4</span> Install <code>MSIreg</code> package</a></li>
-<li><a href="#install-rstudio-server" id="toc-install-rstudio-server"><span class="toc-section-number">3.5</span> Install RStudio server</a></li>
-<li><a href="#start-rstudio-server-within-the-activated-conda-environment" id="toc-start-rstudio-server-within-the-activated-conda-environment"><span class="toc-section-number">3.6</span> Start RStudio server within the activated conda environment</a></li>
-<li><a href="#access-rstudio-server" id="toc-access-rstudio-server"><span class="toc-section-number">3.7</span> Access RStudio server</a></li>
+<li><a href="#install-wsl" id="toc-install-wsl"><span class="toc-section-number">3.1</span> Install WSL</a></li>
+<li><a href="#interoperabilty-of-windows-and-linux-file-systems" id="toc-interoperabilty-of-windows-and-linux-file-systems"><span class="toc-section-number">3.2</span> Interoperabilty of Windows and Linux file systems</a></li>
+<li><a href="#create-conda-environment" id="toc-create-conda-environment"><span class="toc-section-number">3.3</span> Create Conda environment</a></li>
+<li><a href="#activate-conda-environment" id="toc-activate-conda-environment"><span class="toc-section-number">3.4</span> Activate Conda environment</a></li>
+<li><a href="#install-necessary-packages" id="toc-install-necessary-packages"><span class="toc-section-number">3.5</span> Install necessary packages</a></li>
+<li><a href="#install-msireg-package" id="toc-install-msireg-package"><span class="toc-section-number">3.6</span> Install <code>MSIreg</code> package</a></li>
+<li><a href="#install-rstudio-server" id="toc-install-rstudio-server"><span class="toc-section-number">3.7</span> Install RStudio server</a></li>
+<li><a href="#start-rstudio-server-within-the-activated-conda-environment" id="toc-start-rstudio-server-within-the-activated-conda-environment"><span class="toc-section-number">3.8</span> Start RStudio server within the activated conda environment</a></li>
+<li><a href="#access-rstudio-server" id="toc-access-rstudio-server"><span class="toc-section-number">3.9</span> Access RStudio server</a></li>
 </ul></li>
 <li><a href="#session-info" id="toc-session-info"><span class="toc-section-number">4</span> Session info</a></li>
 </ul>
@@ -760,41 +762,60 @@ remotes::install_github(&quot;SimpleITK/SimpleITKRInstaller&quot;) </code></pre>
 </div>
 <div id="windows-operating-system" class="section level1" number="3">
 <h1><span class="header-section-number">3</span> Windows operating system</h1>
-<p>The Windows OS and the computer should support the usage of Windows Subsystem for Linux (WSL) for this procedure to succeed.</p>
-<div id="create-conda-environment" class="section level2" number="3.1">
-<h2><span class="header-section-number">3.1</span> Create Conda environment</h2>
+<p>The Windows Subsystem for Linux (WSL) is a feature of Windows OS that lets developers access both Windows and Linux machines on the same computer. You must be running Windows 10 version 2004 and higher (Build 19041 and higher) or Windows 11 to use the installation method below. If you are on earlier versions please see the <a href="https://learn.microsoft.com/en-us/windows/wsl/install-manual">manual install page</a>.</p>
+<p>An alternative WSL installation method is described in the <a href="https://www.youtube.com/watch?v=av0UQy6g2FA">YouTube video</a>.</p>
+<div id="install-wsl" class="section level2" number="3.1">
+<h2><span class="header-section-number">3.1</span> Install WSL</h2>
+<p>Open PowerShell or Windows Command Prompt in administrator mode by right-clicking and selecting “Run as admistrator” and execute the following command.</p>
+<pre class="bash"><code>wsl --install </code></pre>
+<p>The default linux distribution installed is Ubuntu. This can be changed by using the <code>-d</code> flag.</p>
+<pre class="bash"><code>wsl --list --online # lists available distribution
+
+# Select an option from above list and install 
+
+wsl --install -d &lt;Distribution Name&gt; </code></pre>
+<p>Once WSL and a linux distribution (OS) has been installed, you will need to create a user accound and password for it. Please see the best practices for setting up WSL <a href="https://learn.microsoft.com/en-us/windows/wsl/setup/environment#set-up-your-linux-username-and-password">here</a>.</p>
+<p>Once WSL is set up, it is time to create a conda environment.</p>
+</div>
+<div id="interoperabilty-of-windows-and-linux-file-systems" class="section level2" number="3.2">
+<h2><span class="header-section-number">3.2</span> Interoperabilty of Windows and Linux file systems</h2>
+<p>WSL does not require additional hardware and runs entirely on the Windows machine. More specifically, WSL is a feature of Microsoft Windows that allows for running Linux programs directly within Windows without the need for a virtual machine or extra hardware. WSL also shares the same filesystem as Windows so there would be no need for file transfers or extra networking equipment. (Users can write/read files on the Windows drives directly from within the Linux subsystem.)
+For more information on working across Windows and Linux file systems and interoperability, please see <a href="https://learn.microsoft.com/en-us/windows/wsl/filesystems">this link</a>.</p>
+</div>
+<div id="create-conda-environment" class="section level2" number="3.3">
+<h2><span class="header-section-number">3.3</span> Create Conda environment</h2>
 <p>Open an Ubuntu terminal shell and create a new Conda environment called <code>msireg</code> by running the following command.</p>
 <pre class="bash"><code>conda create -n msireg</code></pre>
 </div>
-<div id="activate-conda-environment" class="section level2" number="3.2">
-<h2><span class="header-section-number">3.2</span> Activate Conda environment</h2>
+<div id="activate-conda-environment" class="section level2" number="3.4">
+<h2><span class="header-section-number">3.4</span> Activate Conda environment</h2>
 <p>Activate the newly created Conda environment by running the following command.</p>
 <pre class="bash"><code>conda activate msireg</code></pre>
 </div>
-<div id="install-necessary-packages" class="section level2" number="3.3">
-<h2><span class="header-section-number">3.3</span> Install necessary packages</h2>
+<div id="install-necessary-packages" class="section level2" number="3.5">
+<h2><span class="header-section-number">3.5</span> Install necessary packages</h2>
 <p>Next, install the necessary packages using the following command from within the Conda environment.</p>
 <pre class="bash"><code>conda install -c conda-forge -c bioconda r-base r-devtools r-remotes SimpleITK bioconductor-ebimage bioconductor-cardinal bioconductor-biocparallel r-rtsne</code></pre>
 <p>Consider adding these version numbers to avoid dependency incompatibilities with MSIreg</p>
 <pre class="bash"><code>conda install -c conda-forge -c bioconda r-base=4.2.2 r-devtools=2.4.5 r-remotes SimpleITK=2.2.1 bioconductor-ebimage=4.40.0 bioconductor-cardinal=3.0.1 bioconductor-biocparallel=1.32.5 r-rtsne=0.16</code></pre>
 </div>
-<div id="install-msireg-package" class="section level2" number="3.4">
-<h2><span class="header-section-number">3.4</span> Install <code>MSIreg</code> package</h2>
+<div id="install-msireg-package" class="section level2" number="3.6">
+<h2><span class="header-section-number">3.6</span> Install <code>MSIreg</code> package</h2>
 <p>Open <code>R</code> by running the following command in the terminal from within the Conda environment.</p>
 <pre class="bash"><code>R </code></pre>
 <p>Once R is open, install the <code>MSIreg</code> package by running the following command within <code>R</code>:</p>
 <pre class="r"><code>remotes::install_github(&quot;sslakkimsetty/msireg&quot;) </code></pre>
 </div>
-<div id="install-rstudio-server" class="section level2" number="3.5">
-<h2><span class="header-section-number">3.5</span> Install RStudio server</h2>
+<div id="install-rstudio-server" class="section level2" number="3.7">
+<h2><span class="header-section-number">3.7</span> Install RStudio server</h2>
 <p>To run RStudio in the browser, first download and install RStudio server from <a href="https://posit.co/download/rstudio-server/">Posit</a>. Follow the instructions provided on the website for Debian/Ubuntu to complete the installation.</p>
 <p>Run the following commands in the Ubuntu terminal. You may have to update the download link when updates to RStudio happen.</p>
 <pre class="bash"><code>sudo apt-get install gdebi-core
 wget https://download2.rstudio.org/server/jammy/amd64/rstudio-server-2023.03.0-386-amd64.deb
 sudo gdebi rstudio-server-2023.03.0-386-amd64.deb</code></pre>
 </div>
-<div id="start-rstudio-server-within-the-activated-conda-environment" class="section level2" number="3.6">
-<h2><span class="header-section-number">3.6</span> Start RStudio server within the activated conda environment</h2>
+<div id="start-rstudio-server-within-the-activated-conda-environment" class="section level2" number="3.8">
+<h2><span class="header-section-number">3.8</span> Start RStudio server within the activated conda environment</h2>
 <p>Activate the Conda environment by running the following command in the Ubuntu terminal.</p>
 <pre class="bash"><code>sudo /usr/lib/rstudio-server/bin/rserver \
 --server-daemonize=0 \
@@ -802,8 +823,8 @@ sudo gdebi rstudio-server-2023.03.0-386-amd64.deb</code></pre>
 --rsession-which-r=$(which R) \
 --rsession-ld-library-path=$CONDA_PREFIX/lib</code></pre>
 </div>
-<div id="access-rstudio-server" class="section level2" number="3.7">
-<h2><span class="header-section-number">3.7</span> Access RStudio server</h2>
+<div id="access-rstudio-server" class="section level2" number="3.9">
+<h2><span class="header-section-number">3.9</span> Access RStudio server</h2>
 <p>Access RStudio server by opening your web browser and navigating to <code>http://localhost:8787</code></p>
 <p>Log in to RStudio with your Ubuntu credentials.</p>
 </div>
@@ -811,13 +832,13 @@ sudo gdebi rstudio-server-2023.03.0-386-amd64.deb</code></pre>
 <div id="session-info" class="section level1" number="4">
 <h1><span class="header-section-number">4</span> Session info</h1>
 <pre class="r"><code>sessionInfo()</code></pre>
-<pre><code>## R version 4.4.0 (2024-04-24)
+<pre><code>## R version 4.4.1 (2024-06-14)
 ## Platform: aarch64-apple-darwin23.4.0
-## Running under: macOS Sonoma 14.4.1
+## Running under: macOS Sonoma 14.6.1
 ## 
 ## Matrix products: default
-## BLAS:   /opt/homebrew/Cellar/openblas/0.3.27/lib/libopenblasp-r0.3.27.dylib 
-## LAPACK: /opt/homebrew/Cellar/r/4.4.0_1/lib/R/lib/libRlapack.dylib;  LAPACK version 3.12.0
+## BLAS:   /System/Library/Frameworks/Accelerate.framework/Versions/A/Frameworks/vecLib.framework/Versions/A/libBLAS.dylib 
+## LAPACK: /opt/homebrew/Cellar/r/4.4.1/lib/R/lib/libRlapack.dylib;  LAPACK version 3.12.0
 ## 
 ## locale:
 ## [1] en_US.UTF-8/en_US.UTF-8/en_US.UTF-8/C/en_US.UTF-8/en_US.UTF-8
@@ -829,16 +850,16 @@ sudo gdebi rstudio-server-2023.03.0-386-amd64.deb</code></pre>
 ## [1] stats     graphics  grDevices utils     datasets  methods   base     
 ## 
 ## other attached packages:
-## [1] knitr_1.46       BiocStyle_2.32.0
+## [1] BiocStyle_2.32.0
 ## 
 ## loaded via a namespace (and not attached):
-##  [1] digest_0.6.35       R6_2.5.1            bookdown_0.39      
-##  [4] fastmap_1.1.1       xfun_0.43           cachem_1.0.8       
-##  [7] htmltools_0.5.8.1   rmarkdown_2.26      lifecycle_1.0.4    
-## [10] cli_3.6.2           sass_0.4.9          jquerylib_0.1.4    
-## [13] compiler_4.4.0      tools_4.4.0         evaluate_0.23      
-## [16] bslib_0.7.0         yaml_2.3.8          BiocManager_1.30.22
-## [19] jsonlite_1.8.8      rlang_1.1.3</code></pre>
+##  [1] cli_3.6.3           knitr_1.48          rlang_1.1.4         xfun_0.46          
+##  [5] jsonlite_1.8.8      glue_1.7.0          colorspace_2.1-1    htmltools_0.5.8.1  
+##  [9] sass_0.4.9          scales_1.3.0        rmarkdown_2.27      evaluate_0.24.0    
+## [13] munsell_0.5.1       jquerylib_0.1.4     fastmap_1.2.0       yaml_2.3.10        
+## [17] lifecycle_1.0.4     bookdown_0.40       BiocManager_1.30.23 compiler_4.4.1     
+## [21] rstudioapi_0.16.0   digest_0.6.36       R6_2.5.1            bslib_0.8.0        
+## [25] tools_4.4.1         SimpleITK_2.3.0     cachem_1.1.0</code></pre>
 </div>
 
 
