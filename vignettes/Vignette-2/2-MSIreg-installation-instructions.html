@@ -723,7 +723,8 @@ function toggle_visibility(id1) {
 <li><a href="#start-rstudio-server-within-the-activated-conda-environment" id="toc-start-rstudio-server-within-the-activated-conda-environment"><span class="toc-section-number">3.8</span> Start RStudio server within the activated conda environment</a></li>
 <li><a href="#access-rstudio-server" id="toc-access-rstudio-server"><span class="toc-section-number">3.9</span> Access RStudio server</a></li>
 </ul></li>
-<li><a href="#session-info" id="toc-session-info"><span class="toc-section-number">4</span> Session info</a></li>
+<li><a href="#conversion-tools-from-raw-to-imzml" id="toc-conversion-tools-from-raw-to-imzml"><span class="toc-section-number">4</span> Conversion tools from RAW to imzML</a></li>
+<li><a href="#session-info" id="toc-session-info"><span class="toc-section-number">5</span> Session info</a></li>
 </ul>
 </div>
 
@@ -745,6 +746,7 @@ document.addEventListener("DOMContentLoaded", function() {
 <p><code>MSIreg</code> is an open-source R package for coregistering mass spectrometry images with H&amp;E images. Unfortunately, due to the dependency <code>SimpleITK</code>, the package could not be directly installed from CRAN or Bioconductor. However, using the <code>remotes</code> package, <code>MSIreg</code> can be installed on MacOS and Linux based operating systems directly through <code>R</code>.</p>
 <p>Installing software packages on Windows operating system can sometimes be a challenge due to compatibility issues. However, with the help of Windows Subsystem for Linux (WSL) and RStudio Server, users can overcome these obstacles and install packages such as <code>MSIreg</code> with ease.</p>
 <p>In this guide, we will walk you through the steps to install <code>MSIreg</code> on MacOS, Linux using the <code>remotes</code> package and on Windows using WSL and RStudio Server.</p>
+<p>We will finish with some tools and resources for converting raw MSI from instruments to imzML format.</p>
 </div>
 <div id="macos-and-linux-based-operating-systems" class="section level1" number="2">
 <h1><span class="header-section-number">2</span> MacOS and Linux based operating systems</h1>
@@ -829,8 +831,21 @@ sudo gdebi rstudio-server-2023.03.0-386-amd64.deb</code></pre>
 <p>Log in to RStudio with your Ubuntu credentials.</p>
 </div>
 </div>
-<div id="session-info" class="section level1" number="4">
-<h1><span class="header-section-number">4</span> Session info</h1>
+<div id="conversion-tools-from-raw-to-imzml" class="section level1" number="4">
+<h1><span class="header-section-number">4</span> Conversion tools from RAW to imzML</h1>
+<p>RAW data acquired from different vendors need different ways of converting into imzML. Below are some links and resources for different vendors.</p>
+<ul>
+<li>Thermo: <a href="https://www.ms-imaging.org/imzml/software-tools/raw-to-imzml-converter/">converter for LTQ- and Orbitrap-based instruments</a>; imzML export function is implemented in the new version of <a href="https://www.thermofisher.com/order/catalog/product/10137985">ImageQuest</a> software.</li>
+<li>Waters: imzML export function in <a href="http://www.waters.com/waters/en_US/High-Definition-Imaging-%28HDI%29-Software/nav.htm?locale=en_US&amp;cid=134833914">High Definition Imaging</a> software.</li>
+<li>Bruker: imzML export function in <a href="https://www.bruker.com/products/mass-spectrometry-and-separations/ms-software/fleximaging/overview.html">flexImaging</a> and <a href="https://www.bruker.com/products/mass-spectrometry-and-separations/ms-software/scils/overview.html">SCiLS Lab</a> software.</li>
+<li>ABI SCIEX: use <code>toimzml</code> module</li>
+<li>Shimadzu: imzML export function in <a href="https://www.shimadzu.eu/imaging-mass-solution-ver11-software">Imaging MS Solution 1.1</a>.</li>
+<li>mzML: <a href="http://www.imzmlconverter.co.uk/">imzML converter download link</a></li>
+<li>METASPACE: <a href="http://metaspace2020.eu/imzml">link to converting high mass resolution data to imzML</a>.</li>
+</ul>
+</div>
+<div id="session-info" class="section level1" number="5">
+<h1><span class="header-section-number">5</span> Session info</h1>
 <pre class="r"><code>sessionInfo()</code></pre>
 <pre><code>## R version 4.4.1 (2024-06-14)
 ## Platform: aarch64-apple-darwin23.4.0
@@ -853,13 +868,20 @@ sudo gdebi rstudio-server-2023.03.0-386-amd64.deb</code></pre>
 ## [1] BiocStyle_2.32.0
 ## 
 ## loaded via a namespace (and not attached):
-##  [1] cli_3.6.3           knitr_1.48          rlang_1.1.4         xfun_0.46          
-##  [5] jsonlite_1.8.8      glue_1.7.0          colorspace_2.1-1    htmltools_0.5.8.1  
-##  [9] sass_0.4.9          scales_1.3.0        rmarkdown_2.27      evaluate_0.24.0    
-## [13] munsell_0.5.1       jquerylib_0.1.4     fastmap_1.2.0       yaml_2.3.10        
-## [17] lifecycle_1.0.4     bookdown_0.40       BiocManager_1.30.23 compiler_4.4.1     
-## [21] rstudioapi_0.16.0   digest_0.6.36       R6_2.5.1            bslib_0.8.0        
-## [25] tools_4.4.1         SimpleITK_2.3.0     cachem_1.1.0</code></pre>
+##  [1] sass_0.4.9          tiff_0.1-12         bitops_1.0-8        jpeg_0.1-10        
+##  [5] lattice_0.22-6      digest_0.6.36       magrittr_2.0.3      evaluate_0.24.0    
+##  [9] grid_4.4.1          bookdown_0.40       fftwtools_0.9-11    fastmap_1.2.0      
+## [13] Cardinal_3.4.3      jsonlite_1.8.8      Matrix_1.7-0        ontologyIndex_2.12 
+## [17] ProtGenerics_1.36.0 matter_2.6.0        DBI_1.2.3           mclust_6.1.1       
+## [21] biglm_0.9-3         BiocManager_1.30.23 viridisLite_0.4.2   codetools_0.2-20   
+## [25] jquerylib_0.1.4     abind_1.4-5         cli_3.6.3           rlang_1.1.4        
+## [29] CardinalIO_1.1.6    Biobase_2.64.0      EBImage_4.46.0      cachem_1.1.0       
+## [33] yaml_2.3.10         tools_4.4.1         parallel_4.4.1      BiocParallel_1.38.0
+## [37] locfit_1.5-9.10     BiocGenerics_0.50.0 R6_2.5.1            png_0.1-8          
+## [41] stats4_4.4.1        lifecycle_1.0.4     S4Vectors_0.41.7    htmlwidgets_1.6.4  
+## [45] MASS_7.3-61         irlba_2.3.5.1       bslib_0.8.0         xfun_0.46          
+## [49] rstudioapi_0.16.0   knitr_1.48          htmltools_0.5.8.1   nlme_3.1-165       
+## [53] rmarkdown_2.27      signal_1.8-1        compiler_4.4.1      RCurl_1.98-1.16</code></pre>
 </div>
 
 

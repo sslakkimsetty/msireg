@@ -28,6 +28,8 @@ Installing software packages on Windows operating system can sometimes be a chal
 
 In this guide, we will walk you through the steps to install `MSIreg` on MacOS, Linux using the `remotes` package and on Windows using WSL and RStudio Server. 
 
+We will finish with some tools and resources for converting raw MSI from instruments to imzML format. 
+
 
 # MacOS and Linux based operating systems 
 
@@ -165,6 +167,19 @@ sudo /usr/lib/rstudio-server/bin/rserver \
 Access RStudio server by opening your web browser and navigating to `http://localhost:8787` 
 
 Log in to RStudio with your Ubuntu credentials. 
+
+
+# Conversion tools from RAW to imzML 
+
+RAW data acquired from different vendors need different ways of converting into imzML. Below are some links and resources for different vendors. 
+
+- Thermo: [converter for LTQ- and Orbitrap-based instruments](https://www.ms-imaging.org/imzml/software-tools/raw-to-imzml-converter/); imzML export function is implemented in the new version of [ImageQuest](https://www.thermofisher.com/order/catalog/product/10137985) software. 
+- Waters: imzML export function in [High Definition Imaging](http://www.waters.com/waters/en_US/High-Definition-Imaging-%28HDI%29-Software/nav.htm?locale=en_US&cid=134833914) software. 
+- Bruker: imzML export function in [flexImaging](https://www.bruker.com/products/mass-spectrometry-and-separations/ms-software/fleximaging/overview.html) and [SCiLS Lab](https://www.bruker.com/products/mass-spectrometry-and-separations/ms-software/scils/overview.html) software. 
+- ABI SCIEX: use `toimzml` module 
+- Shimadzu: imzML export function in [Imaging MS Solution 1.1](https://www.shimadzu.eu/imaging-mass-solution-ver11-software). 
+- mzML: [imzML converter download link](http://www.imzmlconverter.co.uk/) 
+- METASPACE: [link to converting high mass resolution data to imzML](http://metaspace2020.eu/imzml). 
 
 
 # Session info 
